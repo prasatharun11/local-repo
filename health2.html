@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Check with CORS Proxy</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .url-container {
+            margin-bottom: 10px;
+        }
+        .url-status {
+            display: inline-block;
+            width: 100px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Health Check of URLs</h1>
+    <div id="urls">
+        <div class="url-container">
+            <span>URL 1: </span><span class="url-status" id="url1-status">Checking...</span>
+        </div>
+        <!-- Repeat for other URLs -->
+    </div>
+
+    <script>
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        const urls = [
+            'https://example1.com/health',
+            // Repeat for other URLs
+        ];
+
+        function checkUrlHealth(url, statusElementId) {
+            fetch(proxyUrl + url)
+                .then(response => response.json())
+                .then(data => {
+                    const status = data.status === 'UP' ? 'Healthy' : 'Unhealthy';
+                    document.getElementById(statusElementId).textContent = status;
+                    document.getElementById(statusElementId).style.color = status === 'Healthy' ? 'green' : 'red';
+                })
+                .catch(error => {
+                    document.getElementById(statusElementId).textContent = 'Unhealthy';
+                    document.getElementById(statusElementId).style.color = 'red';
+                });
+        }
+
+        urls.forEach((url, index) => {
+            checkUrlHealth(url, `url${index + 1}-status`);
+        });
+    </script>
+</body>
+</html>
