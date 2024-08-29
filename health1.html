@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Check with JSONP</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .url-container {
+            margin-bottom: 10px;
+        }
+        .url-status {
+            display: inline-block;
+            width: 100px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Health Check of URLs</h1>
+    <div id="urls">
+        <div class="url-container">
+            <span>URL 1: </span><span class="url-status" id="url1-status">Checking...</span>
+        </div>
+        <!-- Repeat for other URLs -->
+    </div>
+
+    <script>
+        function handleResponse(data, statusElementId) {
+            const status = data.status === 'UP' ? 'Healthy' : 'Unhealthy';
+            document.getElementById(statusElementId).textContent = status;
+            document.getElementById(statusElementId).style.color = status === 'Healthy' ? 'green' : 'red';
+        }
+
+        function checkUrlHealth(url, statusElementId) {
+            const script = document.createElement('script');
+            script.src = `${url}?callback=handleResponse&statusElementId=${statusElementId}`;
+            document.body.appendChild(script);
+        }
+
+        // Example URLs, replace these with actual URLs that support JSONP
+        const urls = [
+            'https://example1.com/health',
+            // Repeat for other URLs
+        ];
+
+        urls.forEach((url, index) => {
+            checkUrlHealth(url, `url${index + 1}-status`);
+        });
+    </script>
+</body>
+</html>
