@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Health Check</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .url-container {
+            margin-bottom: 10px;
+        }
+        .url-status {
+            display: inline-block;
+            width: 100px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Health Check of URLs</h1>
+    <div id="urls">
+        <div class="url-container">
+            <span>URL 1: </span><span class="url-status" id="url1-status">Checking...</span>
+        </div>
+        <div class="url-container">
+            <span>URL 2: </span><span class="url-status" id="url2-status">Checking...</span>
+        </div>
+        <div class="url-container">
+            <span>URL 3: </span><span class="url-status" id="url3-status">Checking...</span>
+        </div>
+        <div class="url-container">
+            <span>URL 4: </span><span class="url-status" id="url4-status">Checking...</span>
+        </div>
+        <div class="url-container">
+            <span>URL 5: </span><span class="url-status" id="url5-status">Checking...</span>
+        </div>
+        <div class="url-container">
+            <span>URL 6: </span><span class="url-status" id="url6-status">Checking...</span>
+        </div>
+        <div class="url-container">
+            <span>URL 7: </span><span class="url-status" id="url7-status">Checking...</span>
+        </div>
+    </div>
+
+    <script>
+        const urls = [
+            'https://example1.com/health',
+            'https://example2.com/health',
+            'https://example3.com/health',
+            'https://example4.com/health',
+            'https://example5.com/health',
+            'https://example6.com/health',
+            'https://example7.com/health'
+        ];
+
+        function checkUrlHealth(url, statusElementId) {
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const status = data.status === 'UP' ? 'Healthy' : 'Unhealthy';
+                    document.getElementById(statusElementId).textContent = status;
+                    document.getElementById(statusElementId).style.color = status === 'Healthy' ? 'green' : 'red';
+                })
+                .catch(error => {
+                    document.getElementById(statusElementId).textContent = 'Unhealthy';
+                    document.getElementById(statusElementId).style.color = 'red';
+                });
+        }
+
+        urls.forEach((url, index) => {
+            checkUrlHealth(url, `url${index + 1}-status`);
+        });
+    </script>
+</body>
+</html>
