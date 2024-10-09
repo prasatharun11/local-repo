@@ -1,8 +1,10 @@
-javascript: (function() { 
-  var email = 'youremail@example.com'; 
-  navigator.clipboard.writeText(email).then(function() { 
-    alert('Copied to clipboard: ' + email); 
-  }, function() { 
-    alert('Failed to copy email to clipboard'); 
-  }); 
+javascript: (() => { 
+  const email = 'youremail@example.com'; 
+  const textArea = document.createElement('textarea'); 
+  textArea.value = email; 
+  document.body.appendChild(textArea); 
+  textArea.select(); 
+  document.execCommand('copy'); 
+  document.body.removeChild(textArea); 
+  alert('Copied to clipboard: ' + email); 
 })();
