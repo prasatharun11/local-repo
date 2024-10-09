@@ -1,0 +1,8 @@
+javascript: (function() { 
+  var email = 'youremail@example.com'; 
+  navigator.clipboard.writeText(email).then(function() { 
+    alert('Copied to clipboard: ' + email); 
+  }, function() { 
+    alert('Failed to copy email to clipboard'); 
+  }); 
+})();
