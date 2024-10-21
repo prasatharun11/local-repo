@@ -1,0 +1,55 @@
+import java.io.*;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class DuplicateAttributeDetector {
+    private static final Pattern componentPattern = Pattern.compile("<\\w+([^>]*?)>");
+
+    public static void main(String[] args) {
+        String directoryPath = "path/to/your/jsp/directory"; // Replace with your directory path
+
+        try {
+            File directory = new File(directoryPath);
+            File[] files = directory.listFiles();
+
+            for (File file : files) {
+                if (file.isFile() && file.getName().endsWith(".jsp")) {
+                    processFile(file);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void processFile(File file) throws IOException {
+        BufferedReader reader = new BufferedReader(new FileReader(file));
+        String line;
+        int lineNumber = 1;
+        Map<String, Integer> attributes = new HashMap<>();
+
+        while ((line = reader.readLine()) != null) {
+            Matcher matcher = componentPattern.matcher(line);
+            while (matcher.find()) {
+                String component = matcher.group();
+                String[] attributePairs = component.split("\\s+");
+
+                for (String attributePair : attributePairs) {
+                    if (attributePair.contains("=")) {
+                        String attributeName = attributePair.split("=")[0];
+                        if (attributes.containsKey(attributeName)) {
+                            System.out.println("Duplicate attribute '" + attributeName + "' found in file " + file.getAbsolutePath() + " at line " + attributes.get(attributeName));
+                        } else {
+                            attributes.put(attributeName, lineNumber);
+                        }
+                    }
+                }
+            }
+
+            lineNumber++;
+        }
+
+        reader.close();
+    }
+}
