@@ -35,6 +35,7 @@ public class DuplicateAttributeChecker {
             StringBuilder currentTag = new StringBuilder();
             String currentTagName = "";
             int openTagCount = 0;
+            int startLineNumber = 0; // Track the starting line number of the current component
 
             while ((line = reader.readLine()) != null) {
                 lineNumber++;
@@ -47,6 +48,7 @@ public class DuplicateAttributeChecker {
                     currentTag.setLength(0); // Clear the StringBuilder for new tag
                     currentTag.append(tagMatcher.group(0)); // Start with the found opening tag
                     openTagCount++;
+                    startLineNumber = lineNumber; // Set the starting line number
                 }
 
                 // Check for closing tags
@@ -54,7 +56,7 @@ public class DuplicateAttributeChecker {
                 while (closingTagMatcher.find()) {
                     if (openTagCount > 0 && closingTagMatcher.group(0).equals("</" + currentTagName + ">")) {
                         openTagCount--;
-                        checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), lineNumber);
+                        checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber);
                         currentTag.setLength(0); // Clear for next tag
                     }
                 }
@@ -67,7 +69,7 @@ public class DuplicateAttributeChecker {
 
             // Final check for any unclosed tags in case file ends without closing
             if (openTagCount > 0) {
-                checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), lineNumber);
+                checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber);
             }
 
         } catch (IOException e) {
