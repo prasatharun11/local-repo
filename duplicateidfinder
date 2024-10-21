@@ -1,0 +1,72 @@
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.regex.*;
+
+public class DuplicateAttributeChecker {
+
+    // Regex pattern to match HTML tags (e.g., <button>).
+    private static final Pattern TAG_PATTERN = Pattern.compile("<\\w+\\s+[^>]+>");
+    // Regex pattern to match HTML attributes (e.g., id="value").
+    private static final Pattern ATTRIBUTE_PATTERN = Pattern.compile("(\\w+)\\s*=\\s*\"[^\"]*\"");
+    // Regex pattern to match JSP Java code blocks (e.g., <% ... %>, <%= ... %>, <%! ... %>).
+    private static final Pattern JSP_CODE_BLOCK_PATTERN = Pattern.compile("<%[^>]*%>");
+
+    public static void main(String[] args) {
+        String directoryPath = "/path/to/your/jsp/files"; // Provide your directory path here
+
+        try {
+            // Walk through all files in the provided directory and filter .jsp files.
+            Files.walk(Paths.get(directoryPath))
+                 .filter(Files::isRegularFile)
+                 .filter(path -> path.toString().endsWith(".jsp"))
+                 .forEach(DuplicateAttributeChecker::processFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void processFile(Path filePath) {
+        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+            String line;
+            int lineNumber = 0;
+
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+                // Remove JSP Java code blocks before processing for HTML tags.
+                String sanitizedLine = removeJspCodeBlocks(line);
+                checkForDuplicateAttributes(sanitizedLine, filePath.toString(), lineNumber);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Remove JSP scriptlets, expressions, and declarations from the line to avoid interference.
+    private static String removeJspCodeBlocks(String line) {
+        Matcher jspMatcher = JSP_CODE_BLOCK_PATTERN.matcher(line);
+        return jspMatcher.replaceAll("");  // Replace JSP code blocks with an empty string.
+    }
+
+    // Check for duplicate attributes within HTML tags.
+    private static void checkForDuplicateAttributes(String line, String fileName, int lineNumber) {
+        Matcher tagMatcher = TAG_PATTERN.matcher(line);
+
+        while (tagMatcher.find()) {
+            String tag = tagMatcher.group();
+            Matcher attributeMatcher = ATTRIBUTE_PATTERN.matcher(tag);
+            Map<String, String> attributes = new HashMap<>();
+
+            while (attributeMatcher.find()) {
+                String attributeName = attributeMatcher.group(1);
+                if (attributes.containsKey(attributeName)) {
+                    // Print a message if a duplicate attribute is found.
+                    System.out.printf("Duplicate attribute '%s' found in file %s at line %d%n", 
+                                      attributeName, fileName, lineNumber);
+                } else {
+                    attributes.put(attributeName, attributeMatcher.group(0));
+                }
+            }
+        }
+    }
+}
