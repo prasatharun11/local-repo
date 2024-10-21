@@ -5,19 +5,20 @@ import java.util.regex.*;
 
 public class DuplicateAttributeChecker {
 
-    // Regex pattern to match HTML tags (e.g., <button ...>).
-    private static final Pattern TAG_PATTERN = Pattern.compile("<(\\w+)([^>]*)>");
+    // Regex pattern to match HTML opening tags (e.g., <button ...>).
+    private static final Pattern OPENING_TAG_PATTERN = Pattern.compile("<(\\w+)([^>]*)>");
     // Regex pattern to match HTML attributes (e.g., id="value").
     private static final Pattern ATTRIBUTE_PATTERN = Pattern.compile("(\\w+)\\s*=\\s*\"[^\"]*\"");
     // Regex pattern to match JSP Java code blocks (e.g., <% ... %>, <%= ... %>, <%! ... %>).
     private static final Pattern JSP_CODE_BLOCK_PATTERN = Pattern.compile("<%[^>]*%>");
-    // Regex pattern to match closing tags (e.g., </button>).
-    private static final Pattern CLOSING_TAG_PATTERN = Pattern.compile("</\\w+>");
+    // Regex pattern to match HTML closing tags (e.g., </button>).
+    private static final Pattern CLOSING_TAG_PATTERN = Pattern.compile("</(\\w+)>");
 
     public static void main(String[] args) {
         String directoryPath = "/path/to/your/jsp/files"; // Provide your directory path here
 
         try {
+            // Walk through all files in the provided directory and filter .jsp files.
             Files.walk(Paths.get(directoryPath))
                  .filter(Files::isRegularFile)
                  .filter(path -> path.toString().endsWith(".jsp"))
@@ -32,21 +33,23 @@ public class DuplicateAttributeChecker {
             String line;
             int lineNumber = 0;
 
+            // To store the current open tag and its starting line number
             StringBuilder currentTag = new StringBuilder();
             String currentTagName = "";
-            int openTagCount = 0;
-            int startLineNumber = 0; // Track the starting line number of the current component
+            int openTagCount = 0; // Track the number of open tags
+            int startLineNumber = -1; // Line number where the tag starts
 
             while ((line = reader.readLine()) != null) {
                 lineNumber++;
                 // Remove JSP Java code blocks before processing for HTML tags.
                 String sanitizedLine = removeJspCodeBlocks(line);
-                Matcher tagMatcher = TAG_PATTERN.matcher(sanitizedLine);
+                Matcher openingTagMatcher = OPENING_TAG_PATTERN.matcher(sanitizedLine);
 
-                while (tagMatcher.find()) {
-                    currentTagName = tagMatcher.group(1);
-                    currentTag.setLength(0); // Clear the StringBuilder for new tag
-                    currentTag.append(tagMatcher.group(0)); // Start with the found opening tag
+                // Check for opening tags
+                while (openingTagMatcher.find()) {
+                    currentTagName = openingTagMatcher.group(1);
+                    currentTag.setLength(0); // Clear the StringBuilder for the new tag
+                    currentTag.append(openingTagMatcher.group(0)); // Start with the found opening tag
                     openTagCount++;
                     startLineNumber = lineNumber; // Set the starting line number
                 }
@@ -54,10 +57,13 @@ public class DuplicateAttributeChecker {
                 // Check for closing tags
                 Matcher closingTagMatcher = CLOSING_TAG_PATTERN.matcher(sanitizedLine);
                 while (closingTagMatcher.find()) {
-                    if (openTagCount > 0 && closingTagMatcher.group(0).equals("</" + currentTagName + ">")) {
+                    String foundClosingTagName = closingTagMatcher.group(1);
+                    if (openTagCount > 0 && foundClosingTagName.equals(currentTagName)) {
                         openTagCount--;
+                        // Check for duplicate attributes in the current tag
                         checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber);
-                        currentTag.setLength(0); // Clear for next tag
+                        currentTag.setLength(0); // Clear for the next tag
+                        currentTagName = ""; // Reset the current tag name
                     }
                 }
 
@@ -67,7 +73,7 @@ public class DuplicateAttributeChecker {
                 }
             }
 
-            // Final check for any unclosed tags in case file ends without closing
+            // Final check for any unclosed tags in case the file ends without closing
             if (openTagCount > 0) {
                 checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber);
             }
