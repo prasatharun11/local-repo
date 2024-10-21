@@ -39,6 +39,8 @@ public class DuplicateAttributeChecker {
             int openTagCount = 0; // Track the number of open tags
             int startLineNumber = -1; // Line number where the tag starts
 
+            Map<String, Integer> attributeLineMap = new HashMap<>(); // Track line numbers for each attribute
+
             while ((line = reader.readLine()) != null) {
                 lineNumber++;
                 // Remove JSP Java code blocks before processing for HTML tags.
@@ -52,6 +54,7 @@ public class DuplicateAttributeChecker {
                     currentTag.append(openingTagMatcher.group(0)); // Start with the found opening tag
                     openTagCount++;
                     startLineNumber = lineNumber; // Set the starting line number
+                    attributeLineMap.clear(); // Reset for new tag
                 }
 
                 // Check for closing tags
@@ -61,7 +64,7 @@ public class DuplicateAttributeChecker {
                     if (openTagCount > 0 && foundClosingTagName.equals(currentTagName)) {
                         openTagCount--;
                         // Check for duplicate attributes in the current tag
-                        checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber);
+                        checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber, attributeLineMap);
                         currentTag.setLength(0); // Clear for the next tag
                         currentTagName = ""; // Reset the current tag name
                     }
@@ -70,12 +73,13 @@ public class DuplicateAttributeChecker {
                 // If the current line contains part of an open tag, append it
                 if (openTagCount > 0) {
                     currentTag.append(" ").append(sanitizedLine.trim());
+                    checkAttributesInLine(sanitizedLine, attributeLineMap, lineNumber); // Check attributes in the line
                 }
             }
 
             // Final check for any unclosed tags in case the file ends without closing
             if (openTagCount > 0) {
-                checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber);
+                checkForDuplicateAttributes(currentTag.toString(), filePath.toString(), startLineNumber, attributeLineMap);
             }
 
         } catch (IOException e) {
@@ -90,18 +94,30 @@ public class DuplicateAttributeChecker {
     }
 
     // Check for duplicate attributes within the HTML tag.
-    private static void checkForDuplicateAttributes(String tag, String fileName, int lineNumber) {
+    private static void checkForDuplicateAttributes(String tag, String fileName, int startLineNumber, Map<String, Integer> attributeLineMap) {
         Matcher attributeMatcher = ATTRIBUTE_PATTERN.matcher(tag);
         Map<String, Integer> attributes = new HashMap<>();
 
         while (attributeMatcher.find()) {
             String attributeName = attributeMatcher.group(1);
             if (attributes.containsKey(attributeName)) {
-                // Print a message if a duplicate attribute is found.
+                // Print a message if a duplicate attribute is found, using the stored line number.
+                int duplicateLine = attributeLineMap.get(attributeName);
                 System.out.printf("Duplicate attribute '%s' found in file %s at line %d%n", 
-                                  attributeName, fileName, lineNumber);
+                                  attributeName, fileName, duplicateLine);
             } else {
                 attributes.put(attributeName, attributeMatcher.start());
+            }
+        }
+    }
+
+    // Check attributes in a single line and store the line number for each.
+    private static void checkAttributesInLine(String line, Map<String, Integer> attributeLineMap, int lineNumber) {
+        Matcher attributeMatcher = ATTRIBUTE_PATTERN.matcher(line);
+        while (attributeMatcher.find()) {
+            String attributeName = attributeMatcher.group(1);
+            if (!attributeLineMap.containsKey(attributeName)) {
+                attributeLineMap.put(attributeName, lineNumber); // Store the line number for each attribute
             }
         }
     }
