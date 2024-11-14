@@ -1,0 +1,89 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.util.Enumeration;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Component
+public class SafeLoggingFilter implements Filter {
+
+    private static final Logger logger = LoggerFactory.getLogger(SafeLoggingFilter.class);
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        String endpoint = httpRequest.getRequestURI();
+        String method = httpRequest.getMethod();
+        String urlParams = "-";
+        String bodyParams = "-";
+
+        try {
+            // Capture URL parameters, if any
+            urlParams = getUrlParams(httpRequest);
+        } catch (Exception e) {
+            logger.warn("Failed to capture URL parameters for endpoint {}: {}", endpoint, e.getMessage());
+        }
+
+        try {
+            // Capture body parameters, if any
+            bodyParams = getBodyParams(httpRequest);
+        } catch (Exception e) {
+            logger.warn("Failed to capture body parameters for endpoint {}: {}", endpoint, e.getMessage());
+        }
+
+        // Log the request details in a compact, fault-tolerant manner
+        logger.info("Endpoint: {}, Method: {}, URL Params: [{}], Body Params: [{}]", endpoint, method, urlParams, bodyParams);
+
+        // Continue with the next filter or the actual endpoint
+        chain.doFilter(request, response);
+    }
+
+    private String getUrlParams(HttpServletRequest request) {
+        Enumeration<String> parameterNames = request.getParameterNames();
+        StringBuilder params = new StringBuilder();
+
+        while (parameterNames.hasMoreElements()) {
+            String paramName = parameterNames.nextElement();
+            String paramValue = request.getParameter(paramName);
+            params.append(paramName).append("=").append(paramValue).append("&");
+        }
+        return params.length() > 0 ? params.substring(0, params.length() - 1) : "-";
+    }
+
+    private String getBodyParams(HttpServletRequest request) throws IOException {
+        StringBuilder body = new StringBuilder();
+        try (BufferedReader reader = request.getReader()) {
+            String bodyContent = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+            if (!bodyContent.isEmpty()) {
+                Map<String, Object> bodyParams = objectMapper.readValue(bodyContent, Map.class);
+                return bodyParams.entrySet().stream()
+                        .map(entry -> entry.getKey() + "=" + entry.getValue())
+                        .collect(Collectors.joining("&"));
+            }
+        } catch (IOException e) {
+            logger.warn("Error reading request body: {}", e.getMessage());
+            throw e;
+        }
+        return "-";
+    }
+
+    @Override
+    public void init(FilterConfig filterConfig) {}
+
+    @Override
+    public void destroy() {}
+}
