@@ -1,0 +1,57 @@
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+
+public class RequestLogger {
+
+    private static final Logger logger = LoggerFactory.getLogger(RequestLogger.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    public static void logRequest(HttpServletRequest request, Object body, long startTime) {
+        try {
+            String endpoint = request.getRequestURI();
+            String method = request.getMethod();
+            String urlParams = getUrlParams(request);
+            String bodyJson = getBodyJson(body);
+
+            // Calculate response time
+            long responseTime = System.currentTimeMillis() - startTime;
+
+            // Log with response time in milliseconds
+            logger.info("{{\"endpoint\": \"{}\", \"method\": \"{}\", \"urlParams\": {}, \"body\": {}, \"responseTimeMs\": {}}}",
+                    endpoint, method, urlParams, bodyJson, responseTime);
+
+        } catch (Exception e) {
+            logger.warn("Failed to log request: {}", e.getMessage());
+        }
+    }
+
+    private static String getUrlParams(HttpServletRequest request) {
+        Map<String, String> params = new HashMap<>();
+        Enumeration<String> parameterNames = request.getParameterNames();
+        while (parameterNames.hasMoreElements()) {
+            String paramName = parameterNames.nextElement();
+            String paramValue = request.getParameter(paramName);
+            params.put(paramName, paramValue);
+        }
+        try {
+            return objectMapper.writeValueAsString(params);
+        } catch (JsonProcessingException e) {
+            return "{}";
+        }
+    }
+
+    private static String getBodyJson(Object body) {
+        try {
+            return objectMapper.writeValueAsString(body);
+        } catch (JsonProcessingException e) {
+            return "{}";
+        }
+    }
+}
