@@ -121,3 +121,142 @@ Build the output JSON structure with summary and details as specified.
 
 
 
+
+
+Here’s another complex DataWeave transformation example:
+
+Question:
+You receive the following JSON payload:
+
+{
+  "orders": [
+    {
+      "orderId": "ORD001",
+      "customer": {
+        "id": 1,
+        "name": "John Doe"
+      },
+      "items": [
+        {"productId": "P101", "quantity": 2, "price": 50},
+        {"productId": "P102", "quantity": 1, "price": 30}
+      ],
+      "orderDate": "2023-11-01"
+    },
+    {
+      "orderId": "ORD002",
+      "customer": {
+        "id": 2,
+        "name": "Jane Smith"
+      },
+      "items": [
+        {"productId": "P103", "quantity": 3, "price": 20},
+        {"productId": "P104", "quantity": 4, "price": 15}
+      ],
+      "orderDate": "2024-03-10"
+    }
+  ]
+}
+
+You need to transform the payload into this structure:
+
+{
+  "report": {
+    "totalOrders": 2,
+    "totalRevenue": 230
+  },
+  "orderDetails": [
+    {
+      "orderId": "ORD001",
+      "customerName": "John Doe",
+      "orderDate": "2023-11-01",
+      "totalAmount": 130,
+      "items": [
+        {"productId": "P101", "totalPrice": 100},
+        {"productId": "P102", "totalPrice": 30}
+      ]
+    },
+    {
+      "orderId": "ORD002",
+      "customerName": "Jane Smith",
+      "orderDate": "2024-03-10",
+      "totalAmount": 100,
+      "items": [
+        {"productId": "P103", "totalPrice": 60},
+        {"productId": "P104", "totalPrice": 60}
+      ]
+    }
+  ]
+}
+
+Task: Write a DataWeave script to transform the input JSON to the output format.
+
+
+---
+
+Solution:
+
+%dw 2.0
+output application/json
+
+var totalRevenue = payload.orders reduce ((acc, order) -> 
+    acc + (order.items reduce ((sum, item) -> sum + (item.quantity * item.price), 0))
+, 0)
+
+---
+{
+  report: {
+    totalOrders: sizeOf(payload.orders),
+    totalRevenue: totalRevenue
+  },
+  orderDetails: payload.orders map (order) -> {
+    orderId: order.orderId,
+    customerName: order.customer.name,
+    orderDate: order.orderDate,
+    totalAmount: order.items reduce ((sum, item) -> sum + (item.quantity * item.price), 0),
+    items: order.items map (item) -> {
+      productId: item.productId,
+      totalPrice: item.quantity * item.price
+    }
+  }
+}
+
+
+---
+
+Explanation:
+
+1. Total Revenue Calculation:
+
+Use reduce to calculate the sum of total price for all items in all orders.
+
+
+
+2. Order Details Transformation:
+
+Iterate over each order in payload.orders.
+
+Extract orderId, customerName, and orderDate.
+
+Calculate totalAmount for each order by reducing the items array.
+
+
+
+3. Item Details Transformation:
+
+For each item, calculate totalPrice as quantity * price.
+
+
+
+4. Final Structure:
+
+Combine the summary (report) and detailed transformation (orderDetails) into the output structure.
+
+
+
+
+
+
+
+
+
+
