@@ -1,0 +1,88 @@
+import net.schmizz.sshj.SSHClient;
+import net.schmizz.sshj.sftp.SFTPClient;
+import net.schmizz.sshj.sftp.RemoteResourceInfo;
+import net.lingala.zip4j.ZipFile;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.util.List;
+
+public class SFTPZipExtractor {
+
+    public static void main(String[] args) {
+        String sftpHost = "your-sftp-server";
+        int sftpPort = 22;
+        String sftpUser = "your-username";
+        String sftpPassword = "your-password";
+        String remoteDirectory = "/remote/path/to/directory";
+
+        try (SSHClient ssh = new SSHClient()) {
+            // Step 1: Connect to SFTP server
+            ssh.addHostKeyVerifier((hostname, port, key) -> true); // Skip host verification
+            ssh.connect(sftpHost, sftpPort);
+            ssh.authPassword(sftpUser, sftpPassword);
+
+            try (SFTPClient sftp = ssh.newSFTPClient()) {
+                // Step 2: List files in the remote directory
+                for (RemoteResourceInfo file : sftp.ls(remoteDirectory)) {
+                    String fileName = file.getName();
+                    if (fileName.endsWith(".zip")) {
+                        System.out.println("Found ZIP file: " + fileName);
+
+                        // Step 3: Download the ZIP file locally
+                        File localZip = new File(System.getProperty("java.io.tmpdir"), fileName);
+                        try (OutputStream os = new FileOutputStream(localZip)) {
+                            sftp.get(remoteDirectory + "/" + fileName, os);
+                        }
+
+                        // Step 4: Check if ZIP is password-protected
+                        ZipFile zipFile = new ZipFile(localZip);
+                        if (zipFile.isEncrypted()) {
+                            System.out.println("The zip file is password-protected: " + fileName);
+                        } else {
+                            System.out.println("The zip file is not password-protected: " + fileName);
+
+                            // Step 5: Create a folder on the SFTP server
+                            String remoteFolderName = fileName.substring(0, fileName.lastIndexOf('.'));
+                            String remoteFolderPath = remoteDirectory + "/" + remoteFolderName;
+                            sftp.mkdir(remoteFolderPath);
+                            System.out.println("Created folder on SFTP server: " + remoteFolderPath);
+
+                            // Step 6: Extract ZIP file locally
+                            File tempFolder = new File(System.getProperty("java.io.tmpdir"), remoteFolderName);
+                            tempFolder.mkdirs();
+                            zipFile.extractAll(tempFolder.getAbsolutePath());
+
+                            // Step 7: Upload extracted files to the SFTP server
+                            for (File extractedFile : tempFolder.listFiles()) {
+                                String remoteFilePath = remoteFolderPath + "/" + extractedFile.getName();
+                                try (FileOutputStream fos = new FileOutputStream(extractedFile)) {
+                                    sftp.put(extractedFile.getAbsolutePath(), remoteFilePath);
+                                    System.out.println("Uploaded: " + extractedFile.getName() + " to " + remoteFilePath);
+                                }
+                            }
+
+                            // Cleanup: Delete temporary local files
+                            deleteRecursively(tempFolder);
+                            localZip.delete();
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Helper method to delete a folder recursively
+    private static void deleteRecursively(File file) {
+        if (file.isDirectory()) {
+            for (File child : file.listFiles()) {
+                deleteRecursively(child);
+            }
+        }
+        file.delete();
+    }
+}
