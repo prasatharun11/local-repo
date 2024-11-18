@@ -1,8 +1,9 @@
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
+import net.schmizz.sshj.sftp.RemoteResourceInfo;
 import net.schmizz.sshj.sftp.SFTPClient;
 
-public class RemoteZipExtractor {
+public class SFTPMultipleZipExtractor {
 
     public static void main(String[] args) {
         String sftpHost = "your-sftp-server";
@@ -10,41 +11,61 @@ public class RemoteZipExtractor {
         String sftpUser = "your-username";
         String sftpPassword = "your-password";
         String remoteDirectory = "/remote/path/to/directory";
-        String zipFileName = "example.zip";
 
         try (SSHClient ssh = new SSHClient()) {
             ssh.addHostKeyVerifier((hostname, port, key) -> true); // Skip host verification
             ssh.connect(sftpHost, sftpPort);
             ssh.authPassword(sftpUser, sftpPassword);
 
-            // Step 1: Create folder on the SFTP server
-            String folderName = zipFileName.substring(0, zipFileName.lastIndexOf('.'));
-            String remoteFolderPath = remoteDirectory + "/" + folderName;
-
             try (SFTPClient sftp = ssh.newSFTPClient()) {
-                sftp.mkdir(remoteFolderPath);
-                System.out.println("Created remote folder: " + remoteFolderPath);
-            }
+                // Step 1: List all files in the remote directory
+                for (RemoteResourceInfo fileInfo : sftp.ls(remoteDirectory)) {
+                    String fileName = fileInfo.getName();
 
-            // Step 2: Extract the ZIP file on the server using SSH
-            try (Session session = ssh.startSession()) {
-                String command = String.format("unzip %s/%s -d %s", remoteDirectory, zipFileName, remoteFolderPath);
-                System.out.println("Executing command: " + command);
+                    // Step 2: Check for ZIP files
+                    if (fileName.endsWith(".zip")) {
+                        System.out.println("Found ZIP file: " + fileName);
 
-                Session.Command cmd = session.exec(command);
-                cmd.join(); // Wait for command to finish
-                String output = new String(cmd.getInputStream().readAllBytes());
-                String error = new String(cmd.getErrorStream().readAllBytes());
+                        // Step 3: Create a folder with the same name as the ZIP file (without extension)
+                        String folderName = fileName.substring(0, fileName.lastIndexOf('.'));
+                        String remoteFolderPath = remoteDirectory + "/" + folderName;
 
-                if (!output.isEmpty()) {
-                    System.out.println("Command Output: " + output);
-                }
-                if (!error.isEmpty()) {
-                    System.err.println("Command Error: " + error);
+                        sftp.mkdir(remoteFolderPath);
+                        System.out.println("Created folder on SFTP server: " + remoteFolderPath);
+
+                        // Step 4: Extract the ZIP file on the server
+                        extractZipOnServer(ssh, remoteDirectory + "/" + fileName, remoteFolderPath);
+                    }
                 }
             }
 
         } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void extractZipOnServer(SSHClient ssh, String zipFilePath, String destinationFolder) {
+        try (Session session = ssh.startSession()) {
+            // Step 5: Run the unzip command on the server
+            String command = String.format("unzip %s -d %s", zipFilePath, destinationFolder);
+            System.out.println("Executing command: " + command);
+
+            Session.Command cmd = session.exec(command);
+            cmd.join(); // Wait for command completion
+
+            // Read and print command output and errors
+            String output = new String(cmd.getInputStream().readAllBytes());
+            String error = new String(cmd.getErrorStream().readAllBytes());
+
+            if (!output.isEmpty()) {
+                System.out.println("Command Output: " + output);
+            }
+            if (!error.isEmpty()) {
+                System.err.println("Command Error: " + error);
+            }
+
+        } catch (Exception e) {
+            System.err.println("Error while extracting ZIP file: " + e.getMessage());
             e.printStackTrace();
         }
     }
