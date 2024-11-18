@@ -1,0 +1,123 @@
+Here's a complex MuleSoft DataWeave question:
+
+Question:
+You have an API that receives the following JSON payload:
+
+{
+  "employees": [
+    {
+      "id": 101,
+      "name": "Alice",
+      "department": "HR",
+      "joiningDate": "2020-01-15"
+    },
+    {
+      "id": 102,
+      "name": "Bob",
+      "department": "Finance",
+      "joiningDate": "2022-07-10"
+    },
+    {
+      "id": 103,
+      "name": "Charlie",
+      "department": "IT",
+      "joiningDate": "2019-12-01"
+    }
+  ]
+}
+
+You need to transform this payload to match the following output format:
+
+{
+  "summary": {
+    "totalEmployees": 3,
+    "departments": ["HR", "Finance", "IT"]
+  },
+  "details": [
+    {
+      "employeeId": 101,
+      "employeeName": "Alice",
+      "yearsOfService": 4
+    },
+    {
+      "employeeId": 102,
+      "employeeName": "Bob",
+      "yearsOfService": 2
+    },
+    {
+      "employeeId": 103,
+      "employeeName": "Charlie",
+      "yearsOfService": 5
+    }
+  ]
+}
+
+The "yearsOfService" should be calculated based on the difference between the current year (2024) and the year in the "joiningDate" field.
+
+Task: Write a DataWeave script to perform this transformation.
+
+Challenge:
+
+1. Ensure no hardcoding of the year in your solution (use the current system year dynamically).
+
+
+2. Remove any duplicate department names.
+
+
+3. Format the result to meet the specified structure exactly.
+
+
+
+Here is the DataWeave script to solve the problem:
+
+%dw 2.0
+output application/json
+
+var currentYear = now() as Date {format: "yyyy"} as Number
+
+---
+{
+  summary: {
+    totalEmployees: sizeOf(payload.employees),
+    departments: (payload.employees.department) distinctBy $
+  },
+  details: payload.employees map (employee) -> {
+    employeeId: employee.id,
+    employeeName: employee.name,
+    yearsOfService: currentYear - (employee.joiningDate as Date {format: "yyyy-MM-dd"}).year
+  }
+}
+
+Explanation:
+
+1. Current Year Calculation:
+
+now() retrieves the current date and time.
+
+Convert it to a Date type and extract the year using .as Number.
+
+
+
+2. Distinct Departments:
+
+Use (payload.employees.department) distinctBy $ to get unique department names.
+
+
+
+3. Mapping Employee Details:
+
+payload.employees map (employee) iterates through each employee.
+
+yearsOfService is calculated by subtracting the year of joining from the current year.
+
+
+
+4. Final Transformation:
+
+Build the output JSON structure with summary and details as specified.
+
+
+
+
+
+
