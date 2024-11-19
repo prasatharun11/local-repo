@@ -1,0 +1,29 @@
+$(document).ready(function () {
+    function updateDates() {
+        const year = parseInt($("#year").val());
+        const month = parseInt($("#month").val());
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const selectedDate = parseInt($("#date").val());
+
+        // Loop through all date options
+        $("#date option").each(function () {
+            const date = parseInt($(this).val());
+            if (date > daysInMonth) {
+                $(this).hide(); // Hide invalid dates
+            } else {
+                $(this).show(); // Show valid dates
+            }
+        });
+
+        // Retain the selected date if valid; otherwise, reset it
+        if (selectedDate > daysInMonth) {
+            $("#date").val(1); // Reset to a valid date (e.g., 1st)
+        }
+    }
+
+    // Attach change events for year and month
+    $("#year, #month").change(updateDates);
+
+    // Initialize on page load
+    updateDates();
+});
