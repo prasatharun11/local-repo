@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Service Health Check</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      text-align: left;
+      padding: 8px;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    .status-up {
+      color: green;
+      font-weight: bold;
+    }
+    .status-down {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Service Health Check</h1>
+  <button id="checkHealthBtn">Check Health</button>
+  <table>
+    <thead>
+      <tr>
+        <th>Service URL</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="statusTableBody">
+      <!-- Status rows will be added dynamically -->
+    </tbody>
+  </table>
+
+  <script>
+    const urls = [
+      'https://example.com/service1/health',
+      'https://example.com/service2/health',
+      'https://example.com/service3/health',
+      // Add more URLs as needed
+    ];
+
+    document.getElementById('checkHealthBtn').addEventListener('click', () => {
+      const tableBody = document.getElementById('statusTableBody');
+      tableBody.innerHTML = ''; // Clear previous results
+
+      urls.forEach(url => {
+        fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            const status = data.status === 'UP' ? 'UP' : 'DOWN';
+            addRow(url, status);
+          })
+          .catch(() => {
+            addRow(url, 'DOWN');
+          });
+      });
+    });
+
+    function addRow(url, status) {
+      const tableBody = document.getElementById('statusTableBody');
+      const row = document.createElement('tr');
+
+      const urlCell = document.createElement('td');
+      urlCell.textContent = url;
+
+      const statusCell = document.createElement('td');
+      statusCell.textContent = status;
+      statusCell.className = status === 'UP' ? 'status-up' : 'status-down';
+
+      row.appendChild(urlCell);
+      row.appendChild(statusCell);
+      tableBody.appendChild(row);
+    }
+  </script>
+</body>
+</html>
