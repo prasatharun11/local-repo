@@ -1,0 +1,45 @@
+function recalculatePage(currentPage, oldPageSize, newPageSize, totalRows = null) {
+    // Handle invalid inputs
+    if (newPageSize <= 0 || oldPageSize <= 0 || currentPage < 1) {
+        console.error("Page size must be greater than zero, and current page must be valid.");
+        return null;
+    }
+
+    // Calculate the current row index
+    let currentRowIndex = (currentPage - 1) * oldPageSize;
+
+    // Calculate the new page number
+    let newPage = Math.floor(currentRowIndex / newPageSize) + 1;
+
+    // If totalRows is provided, ensure newPage doesn't exceed total pages
+    if (totalRows !== null) {
+        let totalNewPages = Math.ceil(totalRows / newPageSize);
+        newPage = Math.min(newPage, totalNewPages); // Clamp to last page if it exceeds
+    }
+
+    // Ensure the new page is at least 1
+    if (newPage < 1) {
+        newPage = 1;
+    }
+
+    return newPage;
+}
+
+// jQuery example usage
+$(document).ready(function () {
+    // Example 1: Increasing page size without totalRows
+    let page1 = recalculatePage(4, 10, 20);
+    console.log("New Page (Example 1):", page1); // Expected output: 2
+
+    // Example 2: Decreasing page size without totalRows
+    let page2 = recalculatePage(4, 20, 10);
+    console.log("New Page (Example 2):", page2); // Expected output: 7
+
+    // Example 3: Decreasing page size with totalRows
+    let page3 = recalculatePage(4, 20, 10, 95);
+    console.log("New Page (Example 3):", page3); // Expected output: 7 (within bounds)
+
+    // Example 4: Current page exceeds total rows
+    let page4 = recalculatePage(4, 20, 10, 65);
+    console.log("New Page (Example 4):", page4); // Expected output: 6 (last page)
+});
