@@ -1,0 +1,37 @@
+function recalculatePage(currentPage, oldPageSize, newPageSize, totalRows) {
+    // Handle invalid inputs
+    if (newPageSize <= 0 || oldPageSize <= 0 || totalRows <= 0) {
+        throw new Error("Page size and total rows must be greater than zero.");
+    }
+
+    // Calculate the current row index
+    let currentRowIndex = (currentPage - 1) * oldPageSize;
+
+    // Calculate the new total pages
+    let totalNewPages = Math.ceil(totalRows / newPageSize);
+
+    // Calculate the new page number
+    let newPage = Math.floor(currentRowIndex / newPageSize) + 1;
+
+    // Edge case: Ensure the new page is within bounds
+    if (newPage > totalNewPages) {
+        newPage = totalNewPages; // Move to the last page
+    } else if (newPage < 1) {
+        newPage = 1; // Move to the first page
+    }
+
+    return newPage;
+}
+
+// Example usage:
+try {
+    let currentPage = 4;   // Current page user is on
+    let oldPageSize = 20;  // Old page size
+    let newPageSize = 10;  // New page size
+    let totalRows = 95;    // Total number of rows in the dataset
+
+    let newPage = recalculatePage(currentPage, oldPageSize, newPageSize, totalRows);
+    console.log("New Page Number:", newPage);
+} catch (error) {
+    console.error(error.message);
+}
