@@ -1,0 +1,89 @@
+To ensure the recalculated page contains the same records as the current page in possible cases, the logic needs to precisely map rows from the old page size to the new page size. Here's the updated jQuery-compatible function:
+
+
+---
+
+Final Code:
+
+function recalculatePage(currentPage, oldPageSize, newPageSize, totalRows = null) {
+    // Handle invalid inputs
+    if (newPageSize <= 0 || oldPageSize <= 0 || currentPage < 1) {
+        console.error("Page size must be greater than zero, and current page must be valid.");
+        return null;
+    }
+
+    // Calculate the starting row index for the current page
+    let currentRowIndexStart = (currentPage - 1) * oldPageSize;
+
+    // Calculate the new page based on the new page size
+    let newPage = Math.floor(currentRowIndexStart / newPageSize) + 1;
+
+    // If totalRows is provided, ensure the newPage doesn't exceed total pages
+    if (totalRows !== null) {
+        let totalNewPages = Math.ceil(totalRows / newPageSize);
+        newPage = Math.min(newPage, totalNewPages); // Clamp to the last page if it exceeds
+    }
+
+    // Ensure the new page is at least 1
+    if (newPage < 1) {
+        newPage = 1;
+    }
+
+    return newPage;
+}
+
+// Example usage
+$(document).ready(function () {
+    // Example 1: Recalculating to ensure same records with increasing page size
+    let page1 = recalculatePage(3, 10, 5);
+    console.log("New Page (Example 1):", page1); // Expected output: 5
+
+    // Example 2: With totalRows, decreasing page size
+    let page2 = recalculatePage(3, 10, 20, 95);
+    console.log("New Page (Example 2):", page2); // Expected output: 2
+});
+
+
+---
+
+How It Works:
+
+1. Calculate the Start Row of Current Page:
+
+let currentRowIndexStart = (currentPage - 1) * oldPageSize;
+
+This determines the first record of the current page in terms of rows.
+
+
+2. Map Rows to New Page Size:
+The formula ensures the new page starts with the same record as the old page:
+
+let newPage = Math.floor(currentRowIndexStart / newPageSize) + 1;
+
+
+3. Clamp New Page if totalRows is Provided:
+If the total number of rows is available, the function ensures the new page doesn't exceed the maximum number of pages:
+
+let totalNewPages = Math.ceil(totalRows / newPageSize);
+newPage = Math.min(newPage, totalNewPages);
+
+
+4. Handle Edge Cases:
+
+If the new page is less than 1, set it to 1.
+
+Invalid input values result in a logged error.
+
+
+
+
+
+---
+
+Example Scenarios:
+
+
+---
+
+This updated function ensures that the recalculated page contains the same rows the user is currently viewing.
+
