@@ -1,0 +1,134 @@
+I understand now where the issue might be in ensuring the rows shown on the current page with the old page size also appear on the recalculated page with the new page size. Let's approach this step by step to refine the logic and fix the problem.
+
+
+---
+
+Objective
+
+When the newPageSize is different:
+
+1. Determine the row range of the current page based on the oldPageSize.
+
+
+2. Ensure the new page calculated contains the same rows from this range.
+
+
+3. Handle edge cases like when totalRows is provided or when inputs are invalid.
+
+
+
+
+---
+
+Updated Code
+
+Here’s the fixed version to ensure proper row mapping:
+
+function recalculatePage(currentPage, oldPageSize, newPageSize, totalRows = null) {
+    // Handle invalid inputs
+    if (newPageSize <= 0 || oldPageSize <= 0 || currentPage < 1) {
+        console.error("Page size must be greater than zero, and current page must be valid.");
+        return null;
+    }
+
+    // Calculate the row range of the current page
+    let startRow = (currentPage - 1) * oldPageSize + 1; // Inclusive start row
+    let endRow = currentPage * oldPageSize; // Inclusive end row
+
+    // If totalRows is provided, adjust the endRow to not exceed totalRows
+    if (totalRows !== null) {
+        endRow = Math.min(endRow, totalRows);
+    }
+
+    // Determine the new page containing the start row
+    let newPage = Math.ceil(startRow / newPageSize);
+
+    // Ensure the new page doesn't exceed the last page if totalRows is provided
+    if (totalRows !== null) {
+        let totalNewPages = Math.ceil(totalRows / newPageSize);
+        newPage = Math.min(newPage, totalNewPages); // Clamp to the last page if it exceeds
+    }
+
+    return newPage;
+}
+
+// Example usage
+$(document).ready(function () {
+    // Example 1: Decreasing page size, no totalRows
+    let page1 = recalculatePage(3, 10, 5);
+    console.log("New Page (Example 1):", page1); // Expected output: 5
+
+    // Example 2: Increasing page size, no totalRows
+    let page2 = recalculatePage(3, 10, 20);
+    console.log("New Page (Example 2):", page2); // Expected output: 2
+
+    // Example 3: With totalRows, decreasing page size
+    let page3 = recalculatePage(3, 10, 5, 95);
+    console.log("New Page (Example 3):", page3); // Expected output: 5
+
+    // Example 4: With totalRows, increasing page size
+    let page4 = recalculatePage(3, 10, 20, 50);
+    console.log("New Page (Example 4):", page4); // Expected output: 2
+});
+
+
+---
+
+How It Works
+
+1. Row Range Calculation:
+
+For currentPage = 3 and oldPageSize = 10:
+
+Start Row = (3 - 1) * 10 + 1 = 21.
+
+End Row = 3 * 10 = 30.
+
+
+
+
+2. New Page Calculation:
+
+Determine the page that contains startRow in the newPageSize:
+
+newPage = Math.ceil(startRow / newPageSize);
+
+
+
+3. Clamp newPage When totalRows Is Provided:
+
+Ensure newPage doesn’t exceed the maximum pages:
+
+let totalNewPages = Math.ceil(totalRows / newPageSize);
+newPage = Math.min(newPage, totalNewPages);
+
+
+
+4. Edge Cases:
+
+Handle invalid inputs (e.g., currentPage < 1 or pageSize ≤ 0).
+
+Adjust endRow to not exceed totalRows if provided.
+
+
+
+
+
+---
+
+Examples
+
+
+---
+
+Why This Fix Works
+
+It directly maps the row range from the old page size to the new page size.
+
+It calculates the page using the start row, ensuring continuity of records.
+
+It ensures compliance with totalRows when provided.
+
+
+This should now behave as expected for all scenarios! Let me know if there's anything else to clarify.
+
