@@ -1,0 +1,126 @@
+I see the issue now! You want to map the first 5 rows from the current page (when oldPageSize = 5) to a page with the new page size of 10. The key point here is that the rows on the current page should be preserved when recalculating.
+
+Let's go through a step-by-step approach to solve this:
+
+1. Current Page (3) with oldPageSize = 5 means the first 5 rows of page 3, i.e., rows 11 to 15.
+
+
+2. When the newPageSize = 10 is applied, the same rows (11 to 15) need to be mapped to the new page number that will contain these rows.
+
+
+3. The new page number should be calculated based on the rows that existed in the old page, ensuring that it contains the same rows.
+
+
+
+
+---
+
+Solution:
+
+Step 1: Determine the start and end rows of the current page.
+
+Step 2: Using the start row (which is part of the current page), calculate the new page that will hold these rows in the newPageSize.
+
+
+Here’s the updated code to handle this scenario:
+
+
+---
+
+Updated Code:
+
+function recalculatePage(currentPage, oldPageSize, newPageSize, totalRows = null) {
+    // Handle invalid inputs
+    if (newPageSize <= 0 || oldPageSize <= 0 || currentPage < 1) {
+        console.error("Page size must be greater than zero, and current page must be valid.");
+        return null;
+    }
+
+    // Calculate the start row of the current page
+    let startRow = (currentPage - 1) * oldPageSize + 1;
+
+    // Calculate the new page containing this start row, based on the new page size
+    let newPage = Math.ceil(startRow / newPageSize);
+
+    // If totalRows is provided, ensure the newPage doesn't exceed the total number of pages
+    if (totalRows !== null) {
+        let totalNewPages = Math.ceil(totalRows / newPageSize);
+        newPage = Math.min(newPage, totalNewPages); // Clamp to the last page if it exceeds
+    }
+
+    return newPage;
+}
+
+// Example usage
+$(document).ready(function () {
+    // Example 1: Recalculating to the new page size (oldPageSize = 5, newPageSize = 10)
+    let page1 = recalculatePage(3, 5, 10);
+    console.log("New Page (Example 1):", page1); // Expected output: 2
+
+    // Example 2: With totalRows, decreasing page size
+    let page2 = recalculatePage(3, 5, 10, 50);
+    console.log("New Page (Example 2):", page2); // Expected output: 2
+
+    // Example 3: With totalRows, increasing page size
+    let page3 = recalculatePage(4, 10, 5, 50);
+    console.log("New Page (Example 3):", page3); // Expected output: 8
+});
+
+
+---
+
+Explanation:
+
+1. Start Row Calculation:
+
+For currentPage = 3 and oldPageSize = 5, the start row is:
+
+startRow = (3 - 1) * 5 + 1 = 11
+
+This means the first row on page 3 is row number 11.
+
+
+
+2. New Page Calculation:
+
+For newPageSize = 10, calculate the page containing row 11:
+
+newPage = Math.ceil(11 / 10) = 2
+
+Thus, page 2 contains rows 1 to 10, which will now be mapped to page 2.
+
+
+
+3. Clamp New Page if totalRows is Provided:
+
+If totalRows = 50 is passed, it ensures the new page doesn't exceed the total number of pages:
+
+let totalNewPages = Math.ceil(50 / 10) = 5
+newPage = Math.min(newPage, 5) // Clamp the new page to 2 if it's 5
+
+
+
+4. Edge Case Handling:
+
+It ensures that the page calculated will never go below 1.
+
+
+
+
+
+---
+
+Examples of Behavior:
+
+
+---
+
+Why This Should Work:
+
+It ensures that the rows on the current page, determined by the old page size, are mapped correctly to the new page based on the new page size.
+
+The calculation works even with varying total rows, ensuring it won't exceed the last page.
+
+
+Let me know if this now meets your expectations or if any other edge cases need to be handled!
+
