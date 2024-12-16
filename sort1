@@ -1,0 +1,51 @@
+/* Default styling for headers */
+.grid-header {
+    cursor: pointer;
+    position: relative; /* Needed for positioning child elements */
+    padding-right: 20px; /* Space for the image to avoid overlap with text */
+}
+
+/* Hover icon (image) */
+.grid-header:hover::after {
+    content: '';
+    background-image: url('hover-icon.png'); /* Replace with your hover image */
+    background-size: contain;
+    background-repeat: no-repeat;
+    width: 16px; /* Set image width */
+    height: 16px; /* Set image height */
+    position: absolute;
+    right: 5px; /* Position the image */
+    top: 50%; /* Center vertically */
+    transform: translateY(-50%);
+    pointer-events: none; /* Ensure the image does not block mouse events */
+}
+
+/* Sorted ascending (image) */
+.grid-header.sorted-asc::after {
+    content: '';
+    background-image: url('asc-icon.png'); /* Replace with ascending icon image */
+    background-size: contain;
+    background-repeat: no-repeat;
+    width: 16px;
+    height: 16px;
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+/* Sorted descending (image) */
+.grid-header.sorted-desc::after {
+    content: '';
+    background-image: url('desc-icon.png'); /* Replace with descending icon image */
+    background-size: contain;
+    background-repeat: no-repeat;
+    width: 16px;
+    height: 16px;
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
