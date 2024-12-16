@@ -1,0 +1,40 @@
+$(document).ready(function () {
+    function getSortedColumn() {
+        // Find the header with the sorting class
+        const $sortedHeader = $('.grid-header.sorted-asc, .grid-header.sorted-desc');
+
+        if ($sortedHeader.length > 0) {
+            const columnName = $sortedHeader.data('column'); // Get column name from `data-column`
+            const sortOrder = $sortedHeader.hasClass('sorted-asc') ? 'asc' : 'desc'; // Determine the sort order
+
+            return { column: columnName, order: sortOrder };
+        }
+
+        // If no sorted column is found, return null
+        return null;
+    }
+
+    // Bind the click event using `.bind()`
+    $('.grid-header').bind('click', function () {
+        // Toggle sorting classes
+        const $header = $(this);
+        const isAscending = $header.hasClass('sorted-asc');
+        const isDescending = $header.hasClass('sorted-desc');
+
+        // Remove sorting classes from all headers
+        $('.grid-header').removeClass('sorted-asc sorted-desc');
+
+        // Apply sorting class to the clicked header
+        if (isAscending) {
+            $header.addClass('sorted-desc');
+        } else {
+            $header.addClass('sorted-asc');
+        }
+
+        // Get the sorted column and order
+        const sortedColumn = getSortedColumn();
+        if (sortedColumn) {
+            console.log(`Sorted Column: ${sortedColumn.column}, Order: ${sortedColumn.order}`);
+        }
+    });
+});
