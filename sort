@@ -1,0 +1,110 @@
+To add sorting symbols to your grid headers with minimal code changes, you can achieve this using a combination of CSS, JavaScript, and JSP for dynamic rendering. Here’s a step-by-step approach:
+
+1. Add CSS for Hover and Sorting Indicators
+
+Add the following CSS to style the sorting indicators:
+
+/* Default styling for headers */
+.grid-header {
+    cursor: pointer;
+    position: relative;
+}
+
+/* Hover symbol styling */
+.grid-header:hover::after {
+    content: ' ⇅'; /* Up and down arrows */
+    font-size: 12px;
+    color: gray;
+}
+
+/* Sorted ascending */
+.grid-header.sorted-asc::after {
+    content: ' ↑'; /* Up arrow */
+    font-size: 12px;
+    color: black;
+}
+
+/* Sorted descending */
+.grid-header.sorted-desc::after {
+    content: ' ↓'; /* Down arrow */
+    font-size: 12px;
+    color: black;
+}
+
+2. Modify the JSP for Dynamic Rendering
+
+In your JSP file, ensure you add a class to indicate the current sort order. For example:
+
+<table>
+    <thead>
+        <tr>
+            <th class="grid-header ${sortColumn == 'column1' ? (sortOrder == 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}" 
+                data-column="column1">Column 1</th>
+            <th class="grid-header ${sortColumn == 'column2' ? (sortOrder == 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}" 
+                data-column="column2">Column 2</th>
+            <th class="grid-header ${sortColumn == 'column3' ? (sortOrder == 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}" 
+                data-column="column3">Column 3</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Populate rows dynamically -->
+    </tbody>
+</table>
+
+Here:
+
+sortColumn and sortOrder should be passed from the server based on the current sorting state.
+
+
+3. Add JavaScript for Sorting Logic
+
+Use JavaScript to handle the sorting functionality and toggle the classes dynamically:
+
+document.addEventListener('DOMContentLoaded', function () {
+    const headers = document.querySelectorAll('.grid-header');
+
+    headers.forEach(header => {
+        header.addEventListener('click', function () {
+            const column = this.getAttribute('data-column');
+            let currentSort = this.classList.contains('sorted-asc') ? 'asc' : 
+                              (this.classList.contains('sorted-desc') ? 'desc' : null);
+
+            // Clear all headers
+            headers.forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+
+            // Toggle sort order
+            let newSort = currentSort === 'asc' ? 'desc' : 'asc';
+            this.classList.add(newSort === 'asc' ? 'sorted-asc' : 'sorted-desc');
+
+            // Trigger sorting (e.g., fetch data or update UI)
+            sortGrid(column, newSort);
+        });
+    });
+});
+
+function sortGrid(column, order) {
+    // Implement the sorting logic here (e.g., make an AJAX request or update the grid data)
+    console.log(`Sorting by ${column} in ${order} order`);
+    // Optionally reload the grid or make a server-side call.
+}
+
+4. Explanation
+
+CSS: Adds hover and sorting indicators for visual cues.
+
+JSP: Dynamically applies sorting-related classes to the currently sorted column.
+
+JavaScript: Handles the user interaction for sorting and dynamically updates the classes.
+
+
+Minimal Integration
+
+Add the provided CSS and JavaScript to your existing styles and scripts.
+
+Modify the th elements in your JSP to include the grid-header class and data-column attributes.
+
+Ensure your server-side logic supports passing sortColumn and sortOrder to render the initial sorting state.
+
+
+This approach minimizes code changes while adding sorting functionality and indicators to your grid.
+
