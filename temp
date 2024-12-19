@@ -1,0 +1,41 @@
+To dynamically form an HTML line with an onclick event in JavaScript or jQuery, you can construct it like this:
+
+Code Example:
+
+// Assuming `i`, `clmType`, `svrtInd`, and `supFinInd` are defined variables
+var i = 1; // Example value
+var clmType = 'exampleClmType';
+var svrtInd = 'exampleSvrtInd';
+var supFinInd = 'exampleSupFinInd';
+
+// Construct the HTML line with onclick dynamically
+var htmlLine = '<div onclick="loadSymbolFinData(\'' + i + '\', \'' + clmType + '\', \'' + svrtInd + '\', \'' + supFinInd + '\')">Click Here</div>';
+
+// Append it to a container
+$("#yourContainerId").append(htmlLine);
+
+Explanation:
+
+1. Dynamic HTML:
+
+The onclick attribute is populated with the loadSymbolFinData() call and the necessary parameters.
+
+Each parameter is enclosed in single quotes (') to ensure correct JavaScript syntax when passed to the function.
+
+
+
+2. Appending:
+
+Replace #yourContainerId with the selector of the element to which the generated HTML should be appended.
+
+
+
+
+Output Example:
+
+The dynamically generated HTML will look like this:
+
+<div onclick="loadSymbolFinData('1', 'exampleClmType', 'exampleSvrtInd', 'exampleSupFinInd')">Click Here</div>
+
+This will create a clickable <div> that triggers the loadSymbolFinData() function when clicked.
+
