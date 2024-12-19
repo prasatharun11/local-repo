@@ -1,50 +1,21 @@
-<div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-  <!-- Left Section -->
-  <div style="display: flex; align-items: center;">
-    <div class="col-12" id="clm-expand-rows" style="margin-right: 10px;">
-      <img src="<#IRiskConstants.ALL_APP_IMAGES#>/navigate_down.gif" />
-    </div>
-    <div class="col-12 hidden" id="clm-collapse-rows">
-      <img src="<#IRiskConstants.ALL_APP_IMAGES#>/navigate_up.gif" />
-    </div>
-  </div>
+$(document).ready(function () {
+    $('input').on('change', function () {
+        // Get the old and new values
+        const newValue = $(this).val();
+        const oldValue = $(this).data('old-value') || ''; // Default to empty if not set
 
-  <!-- Right Section -->
-  <div>
-    <ul class="pagination" style="display: flex; list-style-type: none; padding: 0; margin: 0;">
-      <li class="page-item">
-        <a class="page-link clickhyperlink" aria-label="First" id="clm-ser-page-first">
-          <span aria-hidden="true">
-            <img class="page-icon" src="<#IRiskConstants.ALL_APP_IMAGES#>/first.png" />
-          </span>
-        </a>
-      </li>
-      <li class="page-item">
-        <a class="page-link clickhyperlink" aria-label="Previous" id="clm-ser-page-prev">
-          <span aria-hidden="true">
-            <img class="page-icon" src="<#IRiskConstants.ALL_APP_IMAGES#>/prev.png" />
-          </span>
-        </a>
-      </li>
-      <li class="page-item" style="display: flex; align-items: center; margin: 0 10px;">
-        <span class="page-title">Page</span>
-        <input id="txtClmPageNumber" type="text" class="form-control" value="0" style="width: 40px; margin: 0 5px;" />
-        <span id="clm-ser-last-pg-nm" class="total-pages">of 0</span>
-      </li>
-      <li class="page-item">
-        <a class="page-link clickhyperlink" aria-label="Next" id="clm-ser-page-next">
-          <span aria-hidden="true">
-            <img class="page-icon" src="<#IRiskConstants.ALL_APP_IMAGES#>/next.png" />
-          </span>
-        </a>
-      </li>
-      <li class="page-item">
-        <a class="page-link clickhyperlink" aria-label="Last" id="clm-ser-page-last">
-          <span aria-hidden="true">
-            <img class="page-icon" src="<#IRiskConstants.ALL_APP_IMAGES#>/last.png" />
-          </span>
-        </a>
-      </li>
-    </ul>
-  </div>
-</div>
+        // Log the old and new values
+        console.log('Old Value:', oldValue);
+        console.log('New Value:', newValue);
+
+        // Update the stored old value
+        $(this).data('old-value', newValue);
+    });
+
+    // Initialize old-value when the input is focused
+    $('input').on('focus', function () {
+        if (!$(this).data('old-value')) {
+            $(this).data('old-value', $(this).val());
+        }
+    });
+});
