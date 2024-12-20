@@ -1,0 +1,55 @@
+function getFormattedCurrency(inputValue, currencyCode) {
+  if (inputValue === null) {
+    inputValue = "0.00";
+  }
+
+  if (currencyCode === null || currencyCode.trim() === "") {
+    currencyCode = "USD";
+  }
+
+  if (currencyCode === "NUM") {
+    return parseFloat(inputValue).toLocaleString('en-US'); 
+  }
+
+  if (currencyCode === "XDB") {
+    var formattedValue = parseFloat(inputValue).toLocaleString('en-US'); 
+    if (parseFloat(inputValue) === 0) {
+      if (formattedValue.indexOf(".") > -1) {
+        var beforeDecimal = formattedValue.substring(0, formattedValue.indexOf(".") + 1);
+        var afterDecimal = formattedValue.substring(formattedValue.indexOf(".") + 1);
+        if (afterDecimal.length === 1) {
+          afterDecimal += "0";
+        }
+        formattedValue = beforeDecimal + afterDecimal;
+      } else {
+        formattedValue += ".00";
+      }
+    }
+    return formattedValue;
+  }
+
+  var locales = getLocalesFromIso4217(currencyCode); 
+  if (locales.length > 0) {
+    return parseFloat(inputValue).toLocaleString(locales[0]); 
+  }
+
+  return inputValue;
+}
+
+function getLocalesFromIso4217(iso4217code) {
+  var locales = [];
+
+  // Get available locales using Intl.NumberFormat
+  var availableLocales = Intl.NumberFormat.availableLocales();
+
+  for (var i = 0; i < availableLocales.length; i++) {
+    var locale = availableLocales[i];
+    var currency = new Intl.NumberFormat(locale).resolvedOptions().currency;
+
+    if (currency === iso4217code) {
+      locales.push(locale);
+    }
+  }
+
+  return locales;
+}
