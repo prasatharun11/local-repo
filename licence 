@@ -44,3 +44,17 @@ function showLicenseAgreement() {
 
 // Call this function to show the dialog
 showLicenseAgreement();
+
+
+
+<div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5);"></div>
+<div id="license-dialog-popup" style="display: none; background: white; border-radius: 8px; overflow: auto;">
+    <div style="padding: 20px;">
+        <h2>License Agreement</h2>
+        <p>
+            <!-- License agreement text goes here -->
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse posuere nec ipsum ut blandit.
+        </p>
+        <button class="license-dialog-close">Close</button>
+    </div>
+</div>
