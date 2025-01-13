@@ -1,0 +1,46 @@
+function showLicenseAgreement() {
+    var previouslyFocusedEle = document.activeElement;
+
+    // Calculate dimensions dynamically
+    var dialogWidth = $(window).width() * 0.8; // 80% of the window width
+    var dialogHeight = $(window).height() * 0.8; // 80% of the window height
+    var dialogLeft = ($(window).width() - dialogWidth) / 2 + "px";
+    var dialogTop = ($(window).height() - dialogHeight) / 2 + "px";
+
+    // Set dimensions and position
+    $("#license-dialog-popup")
+        .css({
+            width: dialogWidth + "px",
+            height: dialogHeight + "px",
+            left: dialogLeft,
+            top: dialogTop,
+            position: "fixed",
+            "z-index": 950,
+        })
+        .show();
+
+    $("#overlay").css({ "z-index": 900 }).show();
+
+    // Close button logic
+    $(".license-dialog-close").click(function () {
+        $("#license-dialog-popup").hide();
+        $("#overlay").hide();
+        if (previouslyFocusedEle) {
+            previouslyFocusedEle.focus();
+        }
+    });
+
+    // Close on Escape
+    $(document).keydown(function (event) {
+        if (event.key === "Escape") {
+            $("#license-dialog-popup").hide();
+            $("#overlay").hide();
+            if (previouslyFocusedEle) {
+                previouslyFocusedEle.focus();
+            }
+        }
+    });
+}
+
+// Call this function to show the dialog
+showLicenseAgreement();
