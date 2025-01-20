@@ -1,5 +1,82 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <div class="registration-container">
+    <style>
+        /* General Styling */
+        .registration-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f9f9f9;
+        }
+
+        .registration-box {
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            width: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Form Styling */
+        .registration-form .form-header h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333333;
+        }
+
+        .registration-form .form-group {
+            margin-bottom: 15px;
+        }
+
+        .registration-form label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #555555;
+        }
+
+        .registration-form input[type="email"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .radio-group, .checkbox-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .radio-group label, .checkbox-group label {
+            margin-left: 5px;
+            font-size: 14px;
+            color: #333333;
+        }
+
+        /* Submit Button */
+        .registration-form .form-footer .submit-button {
+            width: 100%;
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .registration-form .form-footer .submit-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+
     <div class="registration-box">
         <form class="registration-form" action="registerUser" method="POST">
             <div class="form-header">
