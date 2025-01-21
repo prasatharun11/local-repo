@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced User Registration</title>
+  <style>
+    /* Global Styles */
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #f3f4f7, #e9ecef);
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 50px auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+      animation: fadeIn 0.8s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    h2 {
+      text-align: center;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .form-group {
+      padding: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 10px;
+      color: #555;
+      font-weight: bold;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #555;
+      box-sizing: border-box;
+    }
+
+    input:focus, select:focus {
+      border-color: #007bff;
+      outline: none;
+      box-shadow: 0 0 4px rgba(0, 123, 255, 0.4);
+    }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #007bff, #0056b3);
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    button:hover {
+      background: linear-gradient(135deg, #0056b3, #004494);
+    }
+
+    .progress-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f7f7f7;
+      padding: 10px 20px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .progress-bar {
+      position: relative;
+      height: 8px;
+      background: #e0e0e0;
+      flex: 1;
+      margin: 0 10px;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar .active {
+      position: absolute;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(135deg, #007bff, #0056b3);
+      border-radius: 4px;
+      transition: width 0.5s ease-in-out;
+    }
+
+    .progress-circle {
+      width: 30px;
+      height: 30px;
+      background-color: #e0e0e0;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .progress-circle.active {
+      background-color: #007bff;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="progress-container">
+      <div class="progress-circle active">1</div>
+      <div class="progress-bar">
+        <div class="active" style="width: 33%;"></div>
+      </div>
+      <div class="progress-circle">2</div>
+      <div class="progress-bar">
+        <div class="active" style="width: 0%;"></div>
+      </div>
+      <div class="progress-circle">3</div>
+    </div>
+
+    <!-- Page 1: Create Account -->
+    <div class="form-page" id="page-1">
+      <h2>Create Account</h2>
+      <div class="form-group">
+        <label for="userType">Select User Type</label>
+        <select id="userType">
+          <option>Insured</option>
+          <option>Broker</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" placeholder="Enter your email">
+      </div>
+      <div class="form-group">
+        <label for="confirmEmail">Confirm Email Address</label>
+        <input type="email" id="confirmEmail" placeholder="Confirm your email">
+      </div>
+      <button onclick="nextPage(1)">Next</button>
+    </div>
+
+    <!-- Page 2: User Information -->
+    <div class="form-page hidden" id="page-2">
+      <h2>User Information</h2>
+      <div class="form-group">
+        <label for="firstName">First Name</label>
+        <input type="text" id="firstName" placeholder="Enter your first name">
+      </div>
+      <div class="form-group">
+        <label for="lastName">Last Name</label>
+        <input type="text" id="lastName" placeholder="Enter your last name">
+      </div>
+      <div class="form-group">
+        <label for="address">Address</label>
+        <input type="text" id="address" placeholder="Enter your address">
+      </div>
+      <div class="form-group">
+        <label for="country">Country</label>
+        <select id="country">
+          <option>United States</option>
+          <option>Canada</option>
+          <option>India</option>
+          <option>Australia</option>
+        </select>
+      </div>
+      <button onclick="prevPage(1)">Back</button>
+      <button onclick="nextPage(2)">Next</button>
+    </div>
+
+    <!-- Page 3: Authentication -->
+    <div class="form-page hidden" id="page-3">
+      <h2>Authentication</h2>
+      <div class="form-group">
+        <label for="policyNumber">Policy Number</label>
+        <input type="text" id="policyNumber" placeholder="Enter your policy number">
+      </div>
+      <div class="form-group">
+        <label for="policyDate">Policy Effective Date</label>
+        <input type="date" id="policyDate">
+      </div>
+      <div class="form-group">
+        <label for="policyCompany">Policy Issuing Company</label>
+        <input type="text" id="policyCompany" placeholder="Enter policy company">
+      </div>
+      <button onclick="prevPage(2)">Back</button>
+      <button>Complete</button>
+    </div>
+  </div>
+
+  <script>
+    function nextPage(currentPage) {
+      document.getElementById(`page-${currentPage}`).classList.add('hidden');
+      document.getElementById(`page-${currentPage + 1}`).classList.remove('hidden');
+      updateProgressBar(currentPage + 1);
+    }
+
+    function prevPage(currentPage) {
+      document.getElementById(`page-${currentPage}`).classList.add('hidden');
+      document.getElementById(`page-${currentPage - 1}`).classList.remove('hidden');
+      updateProgressBar(currentPage - 1);
+    }
+
+    function updateProgressBar(pageNumber) {
+      const circles = document.querySelectorAll('.progress-circle');
+      const bars = document.querySelectorAll('.progress-bar .active');
+      circles.forEach((circle, index) => {
+        circle.classList.toggle('active', index < pageNumber);
+      });
+      bars.forEach((bar, index) => {
+        bar.style.width = index < pageNumber - 1 ? '100%' : '0%';
+      });
+    }
+  </script>
+</body>
+</html>
