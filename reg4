@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced User Registration</title>
+  <style>
+    /* Global Styles */
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to bottom right, #f8f9fa, #e9ecef);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 90%;
+      max-width: 600px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      animation: slideIn 0.5s ease-in-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateY(-50px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .progress-tracker {
+      display: flex;
+      justify-content: space-between;
+      padding: 20px;
+      background: #f8f9fa;
+      border-bottom: 2px solid #e9ecef;
+    }
+
+    .step {
+      text-align: center;
+      flex: 1;
+    }
+
+    .step-circle {
+      width: 40px;
+      height: 40px;
+      background: #ddd;
+      color: #fff;
+      border-radius: 50%;
+      line-height: 40px;
+      font-size: 16px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 2;
+      transition: all 0.3s ease;
+    }
+
+    .step.active .step-circle {
+      background: linear-gradient(to right, #007bff, #0056b3);
+    }
+
+    .step-bar {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      height: 4px;
+      width: calc(100% - 40px);
+      background: #ddd;
+      z-index: 1;
+    }
+
+    .step.active .step-bar {
+      background: linear-gradient(to right, #007bff, #0056b3);
+    }
+
+    .form-page {
+      display: none;
+      padding: 20px;
+    }
+
+    .form-page.active {
+      display: block;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #555;
+      font-weight: bold;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+    }
+
+    input:focus, select:focus {
+      border-color: #007bff;
+      outline: none;
+    }
+
+    button {
+      width: 48%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button.back {
+      background: #6c757d;
+      color: white;
+    }
+
+    button.next {
+      background: linear-gradient(to right, #007bff, #0056b3);
+      color: white;
+    }
+
+    button.back:hover {
+      background: #5a6268;
+    }
+
+    button.next:hover {
+      background: linear-gradient(to right, #0056b3, #004494);
+    }
+
+    .button-group {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    @media (max-width: 600px) {
+      .button-group button {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+
+      .button-group button:last-child {
+        margin-bottom: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Progress Tracker -->
+    <div class="progress-tracker">
+      <div class="step active">
+        <div class="step-circle">1</div>
+        <div class="step-bar"></div>
+        <small>Create Account</small>
+      </div>
+      <div class="step">
+        <div class="step-circle">2</div>
+        <div class="step-bar"></div>
+        <small>User Info</small>
+      </div>
+      <div class="step">
+        <div class="step-circle">3</div>
+        <small>Authenticate</small>
+      </div>
+    </div>
+
+    <!-- Page 1: Create Account -->
+    <div class="form-page active" id="page-1">
+      <h2>Create Account</h2>
+      <label for="userType">User Type</label>
+      <select id="userType">
+        <option>Insured</option>
+        <option>Broker</option>
+      </select>
+      <label for="email">Email Address</label>
+      <input type="email" id="email" placeholder="Enter your email">
+      <label for="confirmEmail">Confirm Email</label>
+      <input type="email" id="confirmEmail" placeholder="Confirm your email">
+      <div class="button-group">
+        <button class="next" onclick="nextPage(1)">Next</button>
+      </div>
+    </div>
+
+    <!-- Page 2: User Information -->
+    <div class="form-page" id="page-2">
+      <h2>User Information</h2>
+      <label for="firstName">First Name</label>
+      <input type="text" id="firstName" placeholder="Enter your first name">
+      <label for="lastName">Last Name</label>
+      <input type="text" id="lastName" placeholder="Enter your last name">
+      <label for="address">Address</label>
+      <input type="text" id="address" placeholder="Enter your address">
+      <div class="button-group">
+        <button class="back" onclick="prevPage(2)">Back</button>
+        <button class="next" onclick="nextPage(2)">Next</button>
+      </div>
+    </div>
+
+    <!-- Page 3: Authentication -->
+    <div class="form-page" id="page-3">
+      <h2>Authenticate</h2>
+      <label for="policyNumber">Policy Number</label>
+      <input type="text" id="policyNumber" placeholder="Enter policy number">
+      <label for="policyDate">Policy Date</label>
+      <input type="date" id="policyDate">
+      <label for="policyCompany">Policy Company</label>
+      <input type="text" id="policyCompany" placeholder="Enter company name">
+      <div class="button-group">
+        <button class="back" onclick="prevPage(3)">Back</button>
+        <button class="next">Complete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function nextPage(current) {
+      document.getElementById(`page-${current}`).classList.remove('active');
+      document.getElementById(`page-${current + 1}`).classList.add('active');
+      updateProgress(current + 1);
+    }
+
+    function prevPage(current) {
+      document.getElementById(`page-${current}`).classList.remove('active');
+      document.getElementById(`page-${current - 1}`).classList.add('active');
+      updateProgress(current - 1);
+    }
+
+    function updateProgress(step) {
+      const steps = document.querySelectorAll('.step');
+      steps.forEach((s, index) => {
+        s.classList.toggle('active', index < step);
+      });
+    }
+  </script>
+</body>
+</html>
