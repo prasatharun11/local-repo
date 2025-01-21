@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern User Registration</title>
+  <style>
+    /* Global Styles */
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle, #1d1f21, #141517);
+      color: #fff;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    /* Form Wrapper Styles */
+    .form-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      width: 600px;
+      background: #282c34;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Stepper Header */
+    .stepper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .step {
+      width: 25%;
+      position: relative;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .step span {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      background: #444;
+      border-radius: 50%;
+      line-height: 20px;
+      color: #fff;
+      margin-bottom: 5px;
+    }
+
+    /* Form Content */
+    .form-content {
+      display: none;
+    }
+
+    .form-content.active {
+      display: block;
+    }
+
+    /* Input Fields */
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #555;
+      border-radius: 8px;
+      background: #1d1f21;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .row {
+      display: flex;
+      gap: 20px;
+    }
+
+    .row input {
+      flex: 1;
+    }
+
+    .radio-group, .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .radio-group label, .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type="radio"], input[type="checkbox"] {
+      margin: 0;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: #007bff;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .btn:hover {
+      background: #0056b3;
+    }
+
+    .btn-group {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .btn-secondary {
+      background: #444;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-wrapper">
+    <div class="container">
+      <div class="stepper">
+        <div class="step">
+          <span>1</span>
+          <p>Create Account</p>
+        </div>
+        <div class="step active">
+          <span>2</span>
+          <p>User Info</p>
+        </div>
+        <div class="step">
+          <span>3</span>
+          <p>Authentication</p>
+        </div>
+      </div>
+
+      <div class="form-content" id="step-1">
+        <h2>Create Account</h2>
+        <label for="userType">User Type</label>
+        <select id="userType">
+          <option>Insured</option>
+          <option>Broker</option>
+        </select>
+        <label for="email">Email Address</label>
+        <input type="email" id="email" placeholder="Enter your email">
+        <label for="confirmEmail">Confirm Email</label>
+        <input type="email" id="confirmEmail" placeholder="Confirm your email">
+
+        <div class="btn-group">
+          <button class="btn" onclick="nextStep(1)">Next</button>
+        </div>
+      </div>
+
+      <div class="form-content active" id="step-2">
+        <h2>User Info</h2>
+        <div class="row">
+          <div>
+            <label for="firstName">First Name</label>
+            <input type="text" id="firstName" placeholder="Enter your first name">
+          </div>
+          <div>
+            <label for="lastName">Last Name</label>
+            <input type="text" id="lastName" placeholder="Enter your last name">
+          </div>
+        </div>
+        <label for="company">Company Name</label>
+        <input type="text" id="company" placeholder="Enter your company name">
+        <label for="address">Address</label>
+        <input type="text" id="address" placeholder="Enter your address">
+        <div class="row">
+          <div>
+            <label for="city">City</label>
+            <input type="text" id="city" placeholder="Enter your city">
+          </div>
+          <div>
+            <label for="state">State</label>
+            <input type="text" id="state" placeholder="Enter your state">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="postalCode">Postal Code</label>
+            <input type="text" id="postalCode" placeholder="Enter your postal code">
+          </div>
+          <div>
+            <label for="country">Country</label>
+            <select id="country">
+              <option value="">Select your country</option>
+              <option value="US">United States</option>
+              <option value="UK">United Kingdom</option>
+              <option value="CA">Canada</option>
+            </select>
+          </div>
+        </div>
+        <label for="phoneNumber">Phone Number</label>
+        <input type="tel" id="phoneNumber" placeholder="Enter your phone number">
+
+        <div class="btn-group">
+          <button class="btn-secondary btn" onclick="prevStep(1)">Back</button>
+          <button class="btn" onclick="nextStep(2)">Next</button>
+        </div>
+      </div>
+
+      <div class="form-content" id="step-3">
+        <h2>Authentication</h2>
+        <label for="policyNumber">Policy Number</label>
+        <input type="text" id="policyNumber" placeholder="Enter your policy number">
+        <label for="policyIssuingCompany">Policy Issuing Company</label>
+        <select id="policyIssuingCompany">
+          <option value="">Select Policy Issuing Company</option>
+          <option value="AIG">AIG</option>
+          <option value="Other">Other</option>
+        </select>
+        <label for="policyEffectiveDate">Policy Effective Date</label>
+        <input type="date" id="policyEffectiveDate">
+
+        <div class="btn-group">
+          <button class="btn-secondary btn" onclick="prevStep(2)">Back</button>
+          <button class="btn" onclick="finish()">Complete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const steps = document.querySelectorAll('.step');
+    const formContents = document.querySelectorAll('.form-content');
+
+    function nextStep(currentStep) {
+      steps[currentStep -
