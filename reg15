@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intellirisk</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 15px;
+        }
+
+        h2 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .location-select {
+            margin-bottom: 20px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #0070c0; /* AIG blue */
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Intellirisk</h1>
+
+    <div class="location-select">
+        <h2>Select Your Location</h2>
+        <select id="location-dropdown">
+            <option value="us">Brokers based in the U.S.</option>
+            <option value="other">Brokers based outside the U.S.</option>
+        </select>
+    </div>
+
+    <div id="us-instructions" style="display: none;">
+        <p>Intellirisk is now accessed through the myAIG portal. <a href="#" class="cta-button">Click Here</a> to login or register, or request an ID from AIG Broker Services.</p>
+    </div>
+
+    <div id="other-instructions" style="display: none;">
+        <p><a href="#" class="cta-button">Click Here</a> to continue registration.</p>
+    </div>
+
+    <h2>Report a Claim</h2>
+    <p><a href="#" class="cta-button">Click Here</a> to continue registration.</p>
+
+    <script>
+        const locationDropdown = document.getElementById('location-dropdown');
+        const usInstructions = document.getElementById('us-instructions');
+        const otherInstructions = document.getElementById('other-instructions');
+
+        locationDropdown.addEventListener('change', () => {
+            usInstructions.style.display = locationDropdown.value === 'us' ? 'block' : 'none';
+            otherInstructions.style.display = locationDropdown.value === 'other' ? 'block' : 'none';
+        });
+    </script>
+
+</body>
+</html>
