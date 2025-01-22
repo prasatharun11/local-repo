@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messages</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="message-box" class="message-container hidden">
+    <div id="message-icon" class="message-icon">!</div>
+    <div id="message-text" class="message-text">Placeholder message</div>
+  </div>
+
+  <button onclick="showMessage('error', 'We found some errors. Please review the form and make corrections.')">
+    Show Error
+  </button>
+  <button onclick="showMessage('success', 'Your operation was successful!')">Show Success</button>
+  <button onclick="hideMessage()">Hide Message</button>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messages</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="message-box" class="message-container hidden">
+    <div id="message-icon" class="message-icon">!</div>
+    <div id="message-text" class="message-text">Placeholder message</div>
+  </div>
+
+  <button onclick="showMessage('error', 'We found some errors. Please review the form and make corrections.')">
+    Show Error
+  </button>
+  <button onclick="showMessage('success', 'Your operation was successful!')">Show Success</button>
+  <button onclick="hideMessage()">Hide Message</button>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+
+function showMessage(type, text) {
+  const messageBox = document.getElementById('message-box');
+  const messageIcon = document.getElementById('message-icon');
+  const messageText = document.getElementById('message-text');
+
+  // Set the message text
+  messageText.textContent = text;
+
+  // Apply the appropriate class based on type
+  if (type === 'error') {
+    messageBox.className = 'message-container error';
+    messageIcon.textContent = '!';
+  } else if (type === 'success') {
+    messageBox.className = 'message-container success';
+    messageIcon.textContent = '✓';
+  }
+
+  // Make the message box visible
+  messageBox.classList.remove('hidden');
+}
+
+function hideMessage() {
+  const messageBox = document.getElementById('message-box');
+  messageBox.classList.add('hidden');
+}
