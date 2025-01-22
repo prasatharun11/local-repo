@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messages</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="message-box" class="message-container hidden">
+    <div id="message-icon" class="message-icon">i</div>
+    <div id="message-text" class="message-text">Placeholder message</div>
+  </div>
+
+  <button onclick="showMessage('error', 'We found some errors. Please review the form and make corrections.')">
+    Show Error
+  </button>
+  <button onclick="showMessage('success', 'Your operation was successful!')">Show Success</button>
+  <button onclick="showMessage('info', 'This is some informational message.')">Show Info</button>
+  <button onclick="hideMessage()">Hide Message</button>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+
+
+body {
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  margin: 0;
+  background-color: #f8f8f8;
+}
+
+.message-container {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 16px;
+  max-width: 400px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.message-icon {
+  font-size: 24px;
+  font-weight: bold;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-right: 12px;
+  color: white;
+}
+
+.message-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.message-container.error {
+  background-color: #ffecec;
+  border: 1px solid #f5c6c6;
+}
+
+.message-container.error .message-icon {
+  background-color: #d9534f;
+}
+
+.message-container.success {
+  background-color: #e6f9e6;
+  border: 1px solid #c6ecc6;
+}
+
+.message-container.success .message-icon {
+  background-color: #28a745;
+}
+
+.message-container.info {
+  background-color: #e7f3ff;
+  border: 1px solid #b3d8ff;
+}
+
+.message-container.info .message-icon {
+  background-color: #007bff;
+}
+
+
+function showMessage(type, text) {
+  const messageBox = document.getElementById('message-box');
+  const messageIcon = document.getElementById('message-icon');
+  const messageText = document.getElementById('message-text');
+
+  // Set the message text
+  messageText.textContent = text;
+
+  // Apply the appropriate class and icon based on type
+  if (type === 'error') {
+    messageBox.className = 'message-container error';
+    messageIcon.textContent = '!';
+  } else if (type === 'success') {
+    messageBox.className = 'message-container success';
+    messageIcon.textContent = '✓';
+  } else if (type === 'info') {
+    messageBox.className = 'message-container info';
+    messageIcon.textContent = 'i';
+  }
+
+  // Make the message box visible
+  messageBox.classList.remove('hidden');
+}
+
+function hideMessage() {
+  const messageBox = document.getElementById('message-box');
+  messageBox.classList.add('hidden');
+}
