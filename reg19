@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio/Checkbox with Info Button</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .option-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .option-container input {
+            margin-right: 10px;
+        }
+        .info-button {
+            position: relative;
+            display: inline-block;
+            margin-left: 10px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #007BFF;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+            line-height: 20px;
+            cursor: pointer;
+        }
+        .info-button:hover {
+            background-color: #0056b3;
+        }
+        .info-tooltip {
+            display: none;
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        .info-button:hover .info-tooltip {
+            display: block;
+        }
+        .info-tooltip::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #333 transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="option-container">
+        <input type="radio" id="option1" name="options">
+        <label for="option1">Option 1</label>
+        <div class="info-button">i
+            <div class="info-tooltip">This is more information about Option 1.</div>
+        </div>
+    </div>
+    <div class="option-container">
+        <input type="checkbox" id="option2" name="options">
+        <label for="option2">Option 2</label>
+        <div class="info-button">i
+            <div class="info-tooltip">This is more information about Option 2.</div>
+        </div>
+    </div>
+</body>
+</html>
