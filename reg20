@@ -1,0 +1,36 @@
+function showMessage(type, text) {
+  const messageBox = document.getElementById('message-box');
+  const messageIcon = document.getElementById('message-icon');
+  const messageText = document.getElementById('message-text');
+
+  // Detect email addresses in the text and wrap them with a clickable link
+  const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+  const processedText = text.replace(
+    emailRegex,
+    '<a href="mailto:$1" class="email-link">$1</a>'
+  );
+
+  // Set the processed HTML as the message content
+  messageText.innerHTML = processedText;
+
+  // Apply the appropriate class and icon based on type
+  if (type === 'error') {
+    messageBox.className = 'message-container error';
+    messageIcon.textContent = '!';
+  } else if (type === 'success') {
+    messageBox.className = 'message-container success';
+    messageIcon.textContent = '✓';
+  } else if (type === 'info') {
+    messageBox.className = 'message-container info';
+    messageIcon.textContent = 'i';
+  }
+
+  // Make the message box visible
+  messageBox.classList.remove('hidden');
+}
+
+.email-link {
+  color: inherit; /* Match the current message text color */
+  text-decoration: underline;
+  cursor: pointer;
+}
