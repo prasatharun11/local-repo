@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Message Box</title>
+    <style>
+        /* Message Box Styling */
+        .message-container {
+            display: none;
+            position: fixed;
+            top: -100px; /* Start off-screen */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 350px;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            color: #fff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: top 0.5s ease-out, opacity 0.5s ease-out;
+        }
+
+        /* Message Types */
+        .error { background-color: #e74c3c; }
+        .success { background-color: #2ecc71; }
+        .info { background-color: #3498db; }
+
+        /* Header Styling */
+        .message-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        /* Image Styling */
+        .message-image {
+            max-width: 100px;
+            height: auto;
+            display: block;
+            margin: 0 auto 10px;
+        }
+
+        /* Close Button */
+        .close-btn {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            color: inherit;
+        }
+
+        /* Links */
+        .custom-link {
+            color: yellow;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .custom-link:hover {
+            text-decoration: none;
+        }
+
+        /* Show Animation */
+        .show-message {
+            top: 20px; /* Slide down into view */
+            opacity: 1;
+        }
+
+        /* Hide Animation */
+        .hide-message {
+            top: -100px; /* Slide up out of view */
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Message Box -->
+    <div id="message-box" class="message-container">
+        <span id="message-icon" class="message-icon"></span>
+        <span class="close-btn" onclick="hideMessage()">×</span>
+        <img id="message-image" class="message-image hidden" alt="Message Image">
+        <h3 id="message-header" class="message-header hidden"></h3>
+        <p id="message-text"></p>
+    </div>
+
+    <script>
+        function showMessage(type, message, headerText = "", imagePath = "") {
+            const messageBox = document.getElementById("message-box");
+            const messageText = document.getElementById("message-text");
+            const messageHeader = document.getElementById("message-header");
+            const messageImage = document.getElementById("message-image");
+
+            // Replace [click_here] with a clickable link
+            let processedMessage = message.replace(/click_here/g, '<a href="javascript:void(0);" class="custom-link" onclick="handleCustomClick()">Click here</a>');
+
+            // Set message text
+            messageText.innerHTML = processedMessage;
+
+            // Set header if available
+            if (headerText) {
+                messageHeader.textContent = headerText;
+                messageHeader.classList.remove("hidden");
+            } else {
+                messageHeader.classList.add("hidden");
+            }
+
+            // Set image if available
+            if (imagePath) {
+                messageImage.src = imagePath;
+                messageImage.classList.remove("hidden");
+            } else {
+                messageImage.classList.add("hidden");
+            }
+
+            // Apply message type styling
+            messageBox.className = `message-container ${type}`;
+
+            // Show with animation
+            messageBox.style.display = "block";
+            setTimeout(() => {
+                messageBox.classList.add("show-message");
+                messageBox.classList.remove("hide-message");
+            }, 50); // Delay to allow animation transition
+        }
+
+        function hideMessage() {
+            const messageBox = document.getElementById("message-box");
+            messageBox.classList.add("hide-message");
+            messageBox.classList.remove("show-message");
+
+            // Delay hiding after animation completes
+            setTimeout(() => {
+                messageBox.style.display = "none";
+            }, 500);
+        }
+
+        function handleCustomClick() {
+            alert("Custom link clicked!");
+        }
+
+        // Example Usage
+        showMessage(
+            "info",
+            "Welcome! To continue, please [click_here].",
+            "Hello User",
+            "https://via.placeholder.com/100"
+        );
+    </script>
+
+</body>
+</html>
