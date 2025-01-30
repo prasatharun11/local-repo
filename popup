@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pop-Up Example</title>
+    <style>
+        /* Pop-Up Container Style */
+        .popup-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Pop-Up Content Style */
+        .popup-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.25);
+            text-align: center;
+            width: 300px;
+        }
+
+        .popup-content button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .popup-content button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <!-- Pop-Up Container -->
+    <div id="popup" class="popup-container">
+        <div class="popup-content">
+            <h2>Help</h2>
+            <p>Please contact Broker Services, which is open from 9:00 AM to 5:30 PM (ET), Monday through Friday.</p>
+            <p>Call us at 877-867-3783 or email toserve@aig.com.</p>
+            <button onclick="closePopup()">Close</button>
+        </div>
+    </div>
+
+    <!-- Trigger Button -->
+    <button onclick="showPopup()">Show Pop-Up</button>
+
+    <script>
+        // Show Pop-Up
+        function showPopup() {
+            document.getElementById("popup").style.display = "flex";
+        }
+
+        // Close Pop-Up
+        function closePopup() {
+            document.getElementById("popup").style.display = "none";
+        }
+    </script>
+</body>
+</html>
