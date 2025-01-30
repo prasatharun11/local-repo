@@ -1,0 +1,62 @@
+$(document).ready(function() {
+    // Example array of messages
+    var messages = [
+        "IR0808-Validation Failure|Your security answer could not be verified|For security purposes this account has been locked",
+        "IR802-Access Denied|For security purposes your access has been denied.",
+        "IR802-Authorization Failure|You do not have necessary authorization to use this module.",
+        "IR802-Begistration Failure|You are a registered user.",
+        "IR802-Begistration Failure|You are not a registered user.",
+        "IR802-Account Locked|For security purposes your account has been locked",
+        "IR802-Alligation Failure|Your security answer could not be verified|For security purposes this account has been locked",
+        "IR802-Begistration Failure|Please complete step 1 before proceeding.",
+        "IR802-Begistration Failure|Please complete step 2 and step 3 before proceeding.",
+        "IR802-Begistration Failure|Thank you for registering for Report a Claim|The policy data you entered can not be validated|A representative of the IntelliRisk",
+        "IR803-Activation Failure|Error occurred while updating your details.",
+        "IR803-Activation Successful|You have been successfully activated for IntelliRisk|Please click here",
+        "IR803-Activation Failure|Error occurred while updating your details.",
+        "IR803-Begistration Failure|Thank you for your interest in IntelliRisk and/or Report a Claim|The IntelliRisk Services Help Center will contact you within the",
+        "IR804-Login Failure|You are not an IntelliRisk user|Please click here",
+        "IR804-Login Failure|User authorization failed.|Please contact the IntelliRisk Help Center from Monday - Friday 9:00 AM - 6:00 PM ET at 1:00 GMT 787 28:00 GMT",
+        "IR808-Allidation Failure|Your security answer could not be verified|For security purposes this account has been locked",
+        "IR809-Allidation Failure|Your details could not be verified. Please try again.",
+        "IR804-Final Success|Email sent successfully.",
+        "IR808-Authorization Failure|This is a secured action. Please login to application.",
+        "IR808-Breport Download|Error while downloading the report.",
+        "IR808-Login Failure|You are not an IntelliRisk user|Please click here",
+        "IR808-Login Failure|You are not an IntelliRisk user|Please click here",
+        "IR808-Breport Password Failure|Invalid User Id.",
+        "IR808-Authorization Failure|This is a secured action. Please login to application.",
+        "IR808-Authorization Failure|This is a secured action. Please login to application.",
+        "IR808-Access Denied|For security purposes your access has been denied.",
+        "IR808-Activation Successful|You have been successfully activated for IntelliRisk|Please click here",
+        "IR808-Login Failure|User Information is not available.",
+        "IR801-IntelliRisk System Error|We are experiencing technical issues at this time|Please try again later",
+        "IR802-IntelliRisk System Error|We are experiencing technical issues at this time|Please try again later",
+        "IR108-IntelliRisk System Error|We are experiencing technical issues at this time|Please try again later",
+        "IR104-IntelliRisk System Error|We are experiencing technical issues at this time|Please try again later"
+    ];
+
+    // Function to process and display messages
+    function displayMessages(messages) {
+        var $messageContainer = $('#messageContainer'); // Assuming you have a container with id 'messageContainer'
+
+        messages.forEach(function(message) {
+            var parts = message.split('|');
+            var $messageDiv = $('<div>').addClass('message');
+
+            if (parts.length > 1) {
+                $messageDiv.append($('<strong>').text(parts[0])); // First part is harder
+                parts.slice(1).forEach(function(part) {
+                    $messageDiv.append($('<div>').text(part)); // Subsequent parts are new lines
+                });
+            } else {
+                $messageDiv.text(parts[0]); // If only one part, display as is
+            }
+
+            $messageContainer.append($messageDiv);
+        });
+    }
+
+    // Call the function to display messages
+    displayMessages(messages);
+});
