@@ -1,0 +1,29 @@
+import java.util.ArrayList;
+
+public class QueryGenerator {
+
+    public static void generateQueries(ArrayList<String> userIds) {
+        // Array of codes to be used in the queries
+        String[] codes = {"000863473", "005505998", "000000834", "000136554", "000416316", "992060853"};
+        String[] types = {"AIU", "CSC", "DCL", "FCL", "LMS", "AIU"};
+
+        for (String userId : userIds) {
+            for (int i = 0; i < codes.length; i++) {
+                String query = String.format("CALL GAFASDVI.GAFAZ024('%s','%s','%s','%s','',?,?,?);", 
+                                             userId, codes[i], types[i], userId);
+                System.out.println(query);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        // Example list of user IDs
+        ArrayList<String> userIds = new ArrayList<>();
+        userIds.add("U0104747");
+        userIds.add("U0104748");
+        userIds.add("U0104749");
+
+        // Generate and print queries
+        generateQueries(userIds);
+    }
+}
