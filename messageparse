@@ -1,0 +1,73 @@
+import java.util.HashMap;
+import java.util.Map;
+
+public class MessageMapGenerator {
+
+    // Custom class to hold header and text
+    static class MessageInfo {
+        String header;
+        String text;
+
+        MessageInfo(String header, String text) {
+            this.header = header;
+            this.text = text;
+        }
+
+        @Override
+        public String toString() {
+            return "{ header: \"" + header + "\", text: \"" + text + "\" }";
+        }
+    }
+
+    public static void main(String[] args) {
+        // Example input messages
+        String[] messages = {
+            "IR001|Registration Successful|Registration Success email",
+            "IR0808|Validation Failure|Your security answer could not be verified|For security purposes, this account has been locked.",
+            "IR802|Access Denied|For security purposes, your access has been denied.",
+            "IR803|Activation Failure|Error occurred while updating your details.",
+            "IR804|Login Failure|You are not an IntelliRisk user|Please click here.",
+            "IR808|Allidation Failure|Your security answer could not be verified|For security purposes, this account has been locked.",
+            "IR809|Allidation Failure|Your details could not be verified. Please try again.",
+            "IR801|IntelliRisk System Error|We are experiencing technical issues at this time|Please try again later."
+        };
+
+        // Generate the map
+        Map<String, MessageInfo> messageMap = generateMessageMap(messages);
+
+        // Print the map in JavaScript object literal format
+        System.out.println("const messageMapping = {");
+        for (Map.Entry<String, MessageInfo> entry : messageMap.entrySet()) {
+            System.out.println("    \"" + entry.getKey() + "\": " + entry.getValue() + ",");
+        }
+        System.out.println("};");
+    }
+
+    // Method to generate the map
+    public static Map<String, MessageInfo> generateMessageMap(String[] messages) {
+        Map<String, MessageInfo> messageMap = new HashMap<>();
+
+        for (String message : messages) {
+            String[] parts = message.split("\\|"); // Split by "|"
+
+            if (parts.length >= 2) {
+                String code = parts[0]; // First part is the code
+                String header = parts[1]; // Second part is the header
+
+                // Append the remaining parts as text with new lines
+                StringBuilder textBuilder = new StringBuilder();
+                for (int i = 2; i < parts.length; i++) {
+                    if (i > 2) {
+                        textBuilder.append("\\n"); // Add new line for subsequent parts
+                    }
+                    textBuilder.append(parts[i]);
+                }
+
+                String text = textBuilder.toString();
+                messageMap.put(code, new MessageInfo(header, text));
+            }
+        }
+
+        return messageMap;
+    }
+}
