@@ -1,31 +1,90 @@
-import java.io.File;
-import java.nio.file.Paths;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.InvalidPathException;
 
-String linkidParam = request.getParameter("linkid");
+public class SecureFilePathValidator {
+    public static boolean isValidFilePath(String filePath) {
+        try {
+            String baseFolder = String.valueOf(ServiceFactory.getInstance().getAppGlobalFolder()); // Secure Base Directory
+            Path basePath = Paths.get(baseFolder).toAbsolutePath().normalize();
 
-try {
-    int linkid = Integer.parseInt(linkidParam.trim()); // Trim to remove accidental spaces
+            String fileNameWithExt;
+            Path parentFolderPath;
+            boolean isUrl = filePath.startsWith("http://") || filePath.startsWith("https://");
 
-    // Ensure linkid is within the valid range (including 10000 and 50000)
-    if (linkid < 10000 || linkid > 50000) {
-        throw new IllegalArgumentException("Invalid link ID: Out of range");
+            if (isUrl) {
+                // Handle URL case securely
+                URI uri = new URI(filePath);
+
+                // Enforce HTTPS
+                if (!"https".equalsIgnoreCase(uri.getScheme())) {
+                    return false;
+                }
+
+                String path = uri.getPath();
+                fileNameWithExt = path.substring(path.lastIndexOf('/') + 1);
+                parentFolderPath = Paths.get(path).getParent();
+
+            } else {
+                // Handle Local File Path
+                Path filePathObj = Paths.get(filePath).toAbsolutePath().normalize(); // Normalize path to prevent traversal
+
+                // Ensure absolute path
+                if (!filePathObj.isAbsolute()) {
+                    return false;
+                }
+
+                fileNameWithExt = filePathObj.getFileName().toString();
+                parentFolderPath = filePathObj.getParent();
+
+                // Prevent path traversal attack by checking base directory containment
+                if (!filePathObj.startsWith(basePath)) {
+                    return false;
+                }
+            }
+
+            // Validate parent folder (ensure it starts within ServiceFactory directory)
+            if (parentFolderPath == null || !parentFolderPath.toAbsolutePath().normalize().startsWith(basePath)) {
+                return false;
+            }
+
+            // Extract file name and extension
+            int dotIndex = fileNameWithExt.lastIndexOf('.');
+            if (dotIndex == -1) {
+                return false; // No extension found
+            }
+
+            String fileName = fileNameWithExt.substring(0, dotIndex);
+            String extension = fileNameWithExt.substring(dotIndex + 1);
+
+            // Validate file extension
+            if (!"pdf".equalsIgnoreCase(extension)) {
+                return false;
+            }
+
+            // Validate file name is numeric and in range 5000-50000
+            int fileNumber = Integer.parseInt(fileName);
+            return fileNumber >= 5000 && fileNumber <= 50000;
+
+        } catch (URISyntaxException | InvalidPathException | NumberFormatException e) {
+            return false; // Handle invalid URLs, paths, or non-numeric file names
+        }
     }
 
-    // Construct the file path safely
-    String baseFolder = String.valueOf(ServiceFactory.getInstance().getAppGlobalFolder());
-    Path folderPath = Paths.get(baseFolder, linkid + ".pdf").normalize();
+    public static void main(String[] args) {
+        // Test Cases
+        String validLocalPath = "C://servicefactory/docs/6000.pdf";  // ✅ Valid
+        String invalidLocalPath = "C://other_folder/7000.pdf";  // ❌ Invalid (wrong folder)
+        String validUrl = "https://servicefactory.com/files/5500.pdf";  // ✅ Valid
+        String invalidUrl = "http://servicefactory.com/files/4500.pdf";  // ❌ Invalid (wrong number)
+        String traversalPath = "C://servicefactory/../6000.pdf";  // ❌ Invalid (Traversal)
 
-    // Ensure the path is within the allowed base directory
-    Path basePath = Paths.get(baseFolder).toAbsolutePath();
-    if (!folderPath.toAbsolutePath().startsWith(basePath)) {
-        throw new SecurityException("Potential path traversal attack detected");
+        System.out.println("Valid Local: " + isValidFilePath(validLocalPath));  // true
+        System.out.println("Invalid Local: " + isValidFilePath(invalidLocalPath));  // false
+        System.out.println("Valid URL: " + isValidFilePath(validUrl));  // true
+        System.out.println("Invalid URL: " + isValidFilePath(invalidUrl));  // false
+        System.out.println("Path Traversal: " + isValidFilePath(traversalPath));  // false
     }
-
-    File file = folderPath.toFile();
-} catch (NumberFormatException e) {
-    throw new IllegalArgumentException("Invalid link ID: Not a valid number", e);
-} catch (InvalidPathException e) {
-    throw new IllegalArgumentException("Invalid file path", e);
 }
