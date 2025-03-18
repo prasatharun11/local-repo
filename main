@@ -1,0 +1,60 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maintenance in Progress</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #F3F4F6; /* Light grey background similar to the uploaded page */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #2E2E2E; /* Dark grey text */
+        }
+        .container {
+            text-align: center;
+            background-color: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 500px;
+        }
+        h1 {
+            color: #003366; /* Dark blue heading */
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #003366; /* Matching the dark blue theme */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>We'll Be Right Back!</h1>
+        <div class="spinner"></div>
+        <p>
+            The application is currently undergoing maintenance and deployment.<br>
+            We are working hard to bring it back online as soon as possible.<br>
+            Please check back later.
+        </p>
+    </div>
+</body>
+</html>
