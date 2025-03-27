@@ -1,0 +1,177 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+@WebServlet("/downloadExcel")
+public class HtmlToExcelServlet extends HttpServlet {
+
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
+            throws ServletException, IOException {
+        
+        // Get HTML content from request
+        String htmlContent = request.getParameter("htmlContent");
+        if (htmlContent == null || htmlContent.isEmpty()) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "HTML content is required");
+            return;
+        }
+
+        // Set response headers for XLS file download
+        response.setContentType("application/vnd.ms-excel");
+        response.setHeader("Content-Disposition", "attachment; filename=\"report.xls\"");
+        response.setHeader("Cache-Control", "must-revalidate");
+        
+        try (Workbook workbook = createExcelFile(htmlContent);
+             ServletOutputStream out = response.getOutputStream()) {
+            
+            workbook.write(out);
+            out.flush();
+            
+        } catch (Exception e) {
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, 
+                "Error generating Excel file: " + e.getMessage());
+        }
+    }
+
+    private Workbook createExcelFile(String htmlContent) throws IOException {
+        // Parse HTML
+        Document doc = Jsoup.parse(htmlContent);
+        Element table = doc.select("table").first();
+        
+        if (table == null) {
+            throw new IOException("No table found in HTML content");
+        }
+
+        // Create Excel workbook (HSSF for .xls format)
+        Workbook workbook = new HSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Report");
+        
+        // Process table rows
+        Elements rows = table.select("tr");
+        int rowNum = 0;
+        
+        for (Element row : rows) {
+            Row excelRow = sheet.createRow(rowNum++);
+            Elements cells = row.select("td, th");
+            int cellNum = 0;
+            
+            for (Element cell : cells) {
+                Cell excelCell = excelRow.createCell(cellNum++);
+                setCellValueAndStyle(excelCell, cell, workbook);
+                
+                // Handle colspan
+                int colspan = cell.hasAttr("colspan") ? Integer.parseInt(cell.attr("colspan")) : 1;
+                if (colspan > 1) {
+                    sheet.addMergedRegion(new CellRangeAddress(
+                        rowNum - 1, rowNum - 1,
+                        cellNum - 1, cellNum - 1 + colspan - 1
+                    ));
+                }
+            }
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < sheet.getRow(0).getLastCellNum(); i++) {
+            sheet.autoSizeColumn(i);
+        }
+        
+        return workbook;
+    }
+    
+    private void setCellValueAndStyle(Cell excelCell, Element htmlCell, Workbook workbook) {
+        // Set cell value
+        excelCell.setCellValue(htmlCell.text());
+        
+        // Create cell style
+        CellStyle style = workbook.createCellStyle();
+        
+        // Handle alignment
+        String align = htmlCell.attr("align").toLowerCase();
+        switch (align) {
+            case "left": style.setAlignment(HorizontalAlignment.LEFT); break;
+            case "right": style.setAlignment(HorizontalAlignment.RIGHT); break;
+            case "center": style.setAlignment(HorizontalAlignment.CENTER); break;
+            default: style.setAlignment(HorizontalAlignment.GENERAL);
+        }
+        
+        // Handle vertical alignment
+        String valign = htmlCell.attr("valign").toLowerCase();
+        switch (valign) {
+            case "top": style.setVerticalAlignment(VerticalAlignment.TOP); break;
+            case "bottom": style.setVerticalAlignment(VerticalAlignment.BOTTOM); break;
+            case "middle": style.setVerticalAlignment(VerticalAlignment.CENTER); break;
+            default: style.setVerticalAlignment(VerticalAlignment.CENTER);
+        }
+        
+        // Handle background color (limited color support in HSSF)
+        String bgColor = htmlCell.attr("bgcolor");
+        if (!bgColor.isEmpty()) {
+            style.setFillForegroundColor(getHSSFColor(bgColor));
+            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        }
+        
+        // Handle font styles
+        Font font = workbook.createFont();
+        boolean hasStyleChanges = false;
+        
+        // Bold
+        Element boldElement = htmlCell.select("b, strong").first();
+        if (boldElement != null || htmlCell.tagName().equals("th")) {
+            font.setBold(true);
+            hasStyleChanges = true;
+        }
+        
+        // Italic
+        Element italicElement = htmlCell.select("i, em").first();
+        if (italicElement != null) {
+            font.setItalic(true);
+            hasStyleChanges = true;
+        }
+        
+        // Font color
+        String styleAttr = htmlCell.attr("style");
+        if (styleAttr.contains("color:")) {
+            String color = styleAttr.split("color:")[1].split(";")[0].trim();
+            font.setColor(getHSSFColor(color));
+            hasStyleChanges = true;
+        }
+        
+        if (hasStyleChanges) {
+            style.setFont(font);
+        }
+        
+        excelCell.setCellStyle(style);
+    }
+    
+    private short getHSSFColor(String htmlColor) {
+        // Limited color palette for HSSF (.xls format)
+        if (htmlColor.startsWith("#")) {
+            String hex = htmlColor.substring(1);
+            if (hex.equals("FF0000")) return IndexedColors.RED.getIndex();
+            if (hex.equals("00FF00")) return IndexedColors.GREEN.getIndex();
+            if (hex.equals("0000FF")) return IndexedColors.BLUE.getIndex();
+            if (hex.equals("FFFF00")) return IndexedColors.YELLOW.getIndex();
+        }
+        
+        // Named colors
+        switch (htmlColor.toLowerCase()) {
+            case "red": return IndexedColors.RED.getIndex();
+            case "green": return IndexedColors.GREEN.getIndex();
+            case "blue": return IndexedColors.BLUE.getIndex();
+            case "yellow": return IndexedColors.YELLOW.getIndex();
+            case "white": return IndexedColors.WHITE.getIndex();
+            case "black": return IndexedColors.BLACK.getIndex();
+            default: return IndexedColors.AUTOMATIC.getIndex();
+        }
+    }
+}
