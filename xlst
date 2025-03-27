@@ -1,0 +1,13 @@
+public static void main(String[] args) throws IOException {
+    String xmlContent = "<table border='1'><tr><th>Header1</th><th>Header2</th></tr>"
+                      + "<tr><td>Data1</td><td>Data2</td></tr></table>";
+
+    HSSFWorkbook workbook = XmlToExcelConverter.convertXmlToXls(xmlContent);
+
+    // Save the workbook to a file
+    try (FileOutputStream fileOut = new FileOutputStream("output.xls")) {
+        workbook.write(fileOut);
+    }
+
+    System.out.println("Excel file generated successfully!");
+}
