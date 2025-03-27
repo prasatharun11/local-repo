@@ -1,0 +1,183 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class HtmlToExcelConverter {
+
+    public void convertHtmlTableToExcel(String htmlFilePath, String outputExcelPath) throws IOException {
+        // Read HTML file
+        String htmlContent = Files.readString(Path.of(htmlFilePath));
+        
+        // Parse HTML
+        Document doc = Jsoup.parse(htmlContent);
+        Element table = doc.select("table").first();
+        
+        // Create Excel workbook
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Report");
+        
+        // Process table rows
+        Elements rows = table.select("tr");
+        int rowNum = 0;
+        
+        for (Element row : rows) {
+            Row excelRow = sheet.createRow(rowNum++);
+            Elements cells = row.select("td, th");
+            int cellNum = 0;
+            
+            for (Element cell : cells) {
+                Cell excelCell = excelRow.createCell(cellNum++);
+                setCellValueAndStyle(excelCell, cell, workbook);
+                
+                // Handle colspan
+                int colspan = cell.hasAttr("colspan") ? Integer.parseInt(cell.attr("colspan")) : 1;
+                if (colspan > 1) {
+                    sheet.addMergedRegion(new CellRangeAddress(
+                        rowNum - 1, rowNum - 1,
+                        cellNum - 1, cellNum - 1 + colspan - 1
+                    ));
+                }
+            }
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < sheet.getRow(0).getLastCellNum(); i++) {
+            sheet.autoSizeColumn(i);
+        }
+        
+        // Write to file
+        try (FileOutputStream outputStream = new FileOutputStream(outputExcelPath)) {
+            workbook.write(outputStream);
+        }
+        
+        workbook.close();
+    }
+    
+    private void setCellValueAndStyle(Cell excelCell, Element htmlCell, Workbook workbook) {
+        // Set cell value
+        excelCell.setCellValue(htmlCell.text());
+        
+        // Create or get existing cell style
+        CellStyle style = workbook.createCellStyle();
+        
+        // Handle alignment
+        String align = htmlCell.attr("align").toLowerCase();
+        switch (align) {
+            case "left":
+                style.setAlignment(HorizontalAlignment.LEFT);
+                break;
+            case "right":
+                style.setAlignment(HorizontalAlignment.RIGHT);
+                break;
+            case "center":
+                style.setAlignment(HorizontalAlignment.CENTER);
+                break;
+            default:
+                style.setAlignment(HorizontalAlignment.GENERAL);
+        }
+        
+        // Handle vertical alignment
+        String valign = htmlCell.attr("valign").toLowerCase();
+        switch (valign) {
+            case "top":
+                style.setVerticalAlignment(VerticalAlignment.TOP);
+                break;
+            case "bottom":
+                style.setVerticalAlignment(VerticalAlignment.BOTTOM);
+                break;
+            case "middle":
+                style.setVerticalAlignment(VerticalAlignment.CENTER);
+                break;
+            default:
+                style.setVerticalAlignment(VerticalAlignment.CENTER);
+        }
+        
+        // Handle background color
+        String bgColor = htmlCell.attr("bgcolor");
+        if (!bgColor.isEmpty()) {
+            style.setFillForegroundColor(parseHtmlColor(bgColor, workbook));
+            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        }
+        
+        // Handle font styles
+        Font font = workbook.createFont();
+        boolean hasStyleChanges = false;
+        
+        // Bold
+        Element boldElement = htmlCell.select("b, strong").first();
+        if (boldElement != null || htmlCell.tagName().equals("th")) {
+            font.setBold(true);
+            hasStyleChanges = true;
+        }
+        
+        // Italic
+        Element italicElement = htmlCell.select("i, em").first();
+        if (italicElement != null) {
+            font.setItalic(true);
+            hasStyleChanges = true;
+        }
+        
+        // Font color
+        String styleAttr = htmlCell.attr("style");
+        if (styleAttr.contains("color:")) {
+            String color = styleAttr.split("color:")[1].split(";")[0].trim();
+            font.setColor(parseHtmlColor(color, workbook));
+            hasStyleChanges = true;
+        }
+        
+        if (hasStyleChanges) {
+            style.setFont(font);
+        }
+        
+        excelCell.setCellStyle(style);
+    }
+    
+    private short parseHtmlColor(String htmlColor, Workbook workbook) {
+        try {
+            if (htmlColor.startsWith("#")) {
+                String hex = htmlColor.substring(1);
+                if (hex.length() == 3) {
+                    hex = "" + hex.charAt(0) + hex.charAt(0) + 
+                          hex.charAt(1) + hex.charAt(1) + 
+                          hex.charAt(2) + hex.charAt(2);
+                }
+                byte r = (byte) Integer.parseInt(hex.substring(0, 2), 16);
+                byte g = (byte) Integer.parseInt(hex.substring(2, 4), 16);
+                byte b = (byte) Integer.parseInt(hex.substring(4, 6), 16);
+                return new XSSFColor(new byte[]{r, g, b}, null).getIndexed();
+            }
+            
+            // Handle named colors
+            switch (htmlColor.toLowerCase()) {
+                case "red": return IndexedColors.RED.getIndex();
+                case "green": return IndexedColors.GREEN.getIndex();
+                case "blue": return IndexedColors.BLUE.getIndex();
+                case "yellow": return IndexedColors.YELLOW.getIndex();
+                // Add more color mappings as needed
+                default: return IndexedColors.BLACK.getIndex();
+            }
+        } catch (Exception e) {
+            return IndexedColors.BLACK.getIndex();
+        }
+    }
+    
+    public static void main(String[] args) {
+        HtmlToExcelConverter converter = new HtmlToExcelConverter();
+        try {
+            converter.convertHtmlTableToExcel("input.html", "output.xlsx");
+            System.out.println("Conversion completed successfully!");
+        } catch (IOException e) {
+            System.err.println("Error during conversion: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
