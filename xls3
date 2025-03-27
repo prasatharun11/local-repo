@@ -1,0 +1,59 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.*;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+public class XmlToExcelConverter {
+
+    public static HSSFWorkbook convertXmlToXls(String xmlContent) throws IOException {
+        // Parse the XML (HTML-like) string
+        Document doc = Jsoup.parse(xmlContent);
+        Element table = doc.select("table").first();
+        if (table == null) {
+            throw new IllegalArgumentException("No <table> found in XML content");
+        }
+
+        // Create an Excel Workbook and Sheet
+        HSSFWorkbook workbook = new HSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Report");
+
+        Elements rows = table.select("tr");
+        int rowIndex = 0;
+
+        for (Element row : rows) {
+            Row excelRow = sheet.createRow(rowIndex++);
+            Elements cells = row.select("th, td");
+
+            int cellIndex = 0;
+            for (Element cell : cells) {
+                Cell excelCell = excelRow.createCell(cellIndex++);
+                excelCell.setCellValue(cell.text());
+
+                // Apply styles (basic example)
+                CellStyle cellStyle = workbook.createCellStyle();
+                if (cell.tagName().equals("th")) {
+                    Font font = workbook.createFont();
+                    font.setBold(true);
+                    cellStyle.setFont(font);
+                }
+
+                excelCell.setCellStyle(cellStyle);
+            }
+        }
+
+        return workbook;
+    }
+
+    // Optional: Method to get XLS as byte array (for download response)
+    public static byte[] getXlsAsBytes(HSSFWorkbook workbook) throws IOException {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+}
