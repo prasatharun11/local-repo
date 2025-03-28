@@ -1,0 +1,92 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
+public class HtmlToExcelConverter {
+
+    public static void main(String[] args) {
+        String htmlFilePath = "path/to/your/input.html"; // Replace with the actual path
+        String excelFilePath = "path/to/your/output.xls"; // Replace with the desired output path
+
+        try {
+            convertHtmlTableToExcel(htmlFilePath, excelFilePath);
+            System.out.println("HTML table converted to Excel successfully!");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void convertHtmlTableToExcel(String htmlFilePath, String excelFilePath) throws IOException {
+        File inputFile = new File(htmlFilePath);
+        if (!inputFile.exists()) {
+            System.err.println("Error: HTML file not found at " + htmlFilePath);
+            return;
+        }
+
+        Document doc;
+        try (FileInputStream fis = new FileInputStream(inputFile)) {
+            doc = Jsoup.parse(fis, "UTF-8", ""); // Base URI is not needed here
+        }
+
+        Elements tables = doc.select("table");
+
+        if (tables.isEmpty()) {
+            System.out.println("No tables found in the HTML file.");
+            return;
+        }
+
+        // Create a new Excel workbook
+        HSSFWorkbook workbook = new HSSFWorkbook();
+
+        // Process each table found in the HTML
+        for (int tableIndex = 0; tableIndex < tables.size(); tableIndex++) {
+            Element table = tables.get(tableIndex);
+            String sheetName = "Table_" + (tableIndex + 1); // Default sheet name
+            Element caption = table.selectFirst("caption");
+            if (caption != null && !caption.text().trim().isEmpty()) {
+                sheetName = caption.text().trim();
+            }
+
+            Sheet sheet = workbook.createSheet(sheetName);
+            Elements rows = table.select("tr");
+            int rowNum = 0;
+
+            for (Element rowElement : rows) {
+                Row excelRow = sheet.createRow(rowNum++);
+                Elements cells;
+                if (rowElement.select("th").isNotEmpty()) {
+                    cells = rowElement.select("th");
+                } else {
+                    cells = rowElement.select("td");
+                }
+                int cellNum = 0;
+                for (Element cellElement : cells) {
+                    Cell excelCell = excelRow.createCell(cellNum++);
+                    excelCell.setCellValue(cellElement.text().trim());
+                }
+            }
+
+            // Auto-resize columns for better readability (optional)
+            for (int i = 0; i < sheet.getRow(0).getLastCellNum(); i++) {
+                sheet.autoSizeColumn(i);
+            }
+        }
+
+        // Write the workbook to the Excel file
+        try (FileOutputStream fileOut = new FileOutputStream(excelFilePath)) {
+            workbook.write(fileOut);
+        }
+
+        workbook.close();
+    }
+}
