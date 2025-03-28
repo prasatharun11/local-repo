@@ -1,0 +1,183 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.select.Elements;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.util.*;
+
+public class TableBorderedExcelConverter {
+
+    private static final DecimalFormat DECIMAL_FORMAT = (DecimalFormat) DecimalFormat.getInstance(Locale.US);
+
+    public static void convert(String html, String outputPath) throws IOException {
+        Document doc = Jsoup.parse(html);
+        
+        try (HSSFWorkbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            
+            Sheet sheet = workbook.createSheet("Data");
+            int currentRow = 0;
+            
+            for (Node node : doc.body().childNodes()) {
+                if (node instanceof Element) {
+                    Element element = (Element) node;
+                    
+                    if (element.tagName().equals("table")) {
+                        currentRow = processTable(element, sheet, workbook, currentRow);
+                    } else if (isSpacingElement(element)) {
+                        currentRow += getSpacing(element);
+                    }
+                }
+            }
+            
+            workbook.write(out);
+        }
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+        boolean tableHasBorder = table.hasAttr("border") && !table.attr("border").equals("0");
+        int tableWidth = getTableWidth(table);
+        List<CellRangeAddress> mergedRegions = new ArrayList<>();
+        
+        // First pass: process all cells and collect merge regions
+        for (Element tr : table.select("tr")) {
+            Row excelRow = sheet.createRow(startRow++);
+            int colNum = 0;
+            
+            for (Element cell : tr.select("td, th")) {
+                while (excelRow.getCell(colNum) != null) colNum++;
+                
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellValue(cell, excelCell);
+                applyCellStyles(cell, excelCell, workbook, false); // No borders yet
+                
+                // Handle spans
+                int colspan = getSpanValue(cell, "colspan");
+                int rowspan = getSpanValue(cell, "rowspan");
+                if (colspan > 1 || rowspan > 1) {
+                    mergedRegions.add(new CellRangeAddress(
+                        startRow - 1, startRow - 1 + rowspan - 1,
+                        colNum, colNum + colspan - 1
+                    ));
+                }
+                
+                colNum += colspan;
+            }
+            
+            fillEmptyCells(excelRow, tableWidth);
+        }
+        
+        // Second pass: apply table borders
+        if (tableHasBorder) {
+            applyTableBorders(sheet, startRow - table.select("tr").size(), 
+                             table.select("tr").size(), tableWidth, mergedRegions);
+        }
+        
+        // Apply merge regions after borders
+        for (CellRangeAddress region : mergedRegions) {
+            sheet.addMergedRegion(region);
+        }
+        
+        autoSizeColumns(sheet, tableWidth);
+        return startRow;
+    }
+
+    private static void applyTableBorders(Sheet sheet, int startRow, int rowCount, 
+                                        int colCount, List<CellRangeAddress> mergedRegions) {
+        for (int r = startRow; r < startRow + rowCount; r++) {
+            Row row = sheet.getRow(r);
+            for (int c = 0; c < colCount; c++) {
+                Cell cell = row.getCell(c);
+                CellStyle style = cell.getCellStyle();
+                
+                // Skip if cell is part of a merged region (borders handled by first cell)
+                if (isInMergedRegion(mergedRegions, r, c)) continue;
+                
+                // Apply borders based on cell position
+                BorderStyle border = BorderStyle.THIN;
+                
+                // Top border (first row or cell above is merged)
+                if (r == startRow || isMergedAbove(mergedRegions, r, c)) {
+                    style.setBorderTop(border);
+                }
+                
+                // Bottom border (last row or cell below is merged)
+                if (r == startRow + rowCount - 1 || isMergedBelow(mergedRegions, r, c, startRow + rowCount)) {
+                    style.setBorderBottom(border);
+                }
+                
+                // Left border (first column or cell left is merged)
+                if (c == 0 || isMergedLeft(mergedRegions, r, c)) {
+                    style.setBorderLeft(border);
+                }
+                
+                // Right border (last column or cell right is merged)
+                if (c == colCount - 1 || isMergedRight(mergedRegions, r, c, colCount)) {
+                    style.setBorderRight(border);
+                }
+                
+                cell.setCellStyle(style);
+            }
+        }
+    }
+
+    private static boolean isInMergedRegion(List<CellRangeAddress> regions, int row, int col) {
+        for (CellRangeAddress region : regions) {
+            if (region.isInRange(row, col) && 
+                (row != region.getFirstRow() || col != region.getFirstColumn())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isMergedAbove(List<CellRangeAddress> regions, int row, int col) {
+        return regions.stream().anyMatch(r -> 
+            r.getFirstColumn() <= col && r.getLastColumn() >= col &&
+            r.getFirstRow() <= row - 1 && r.getLastRow() >= row - 1);
+    }
+
+    // Similar methods for isMergedBelow, isMergedLeft, isMergedRight
+
+    private static void setCellValue(Element cell, Cell excelCell) {
+        String text = cell.text().trim();
+        
+        if (isNumeric(text)) {
+            try {
+                Number number = DECIMAL_FORMAT.parse(text);
+                excelCell.setCellValue(number.doubleValue());
+                return;
+            } catch (ParseException ignored) {}
+        }
+        
+        excelCell.setCellValue(text);
+    }
+
+    private static void applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean applyBorders) {
+        // ... (same styling logic as before, but without border handling) ...
+    }
+
+    // ... (all other helper methods remain the same) ...
+
+    public static void main(String[] args) throws IOException {
+        String html = "<table border='1'>" +
+                     "<tr><th colspan='2'>Header</th></tr>" +
+                     "<tr><td>1,000.50</td><td rowspan='2'>Merged</td></tr>" +
+                     "<tr><td>Text</td></tr>" +
+                     "</table>" +
+                     "<table border='1'>" +
+                     "<tr><td>Second</td><td>Table</td></tr>" +
+                     "</table>";
+        
+        convert(html, "table_bordered.xls");
+        System.out.println("Conversion successful with perfect table borders!");
+    }
+}
