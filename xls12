@@ -1,0 +1,178 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class HtmlToExcelConverter {
+
+    public static void main(String[] args) {
+        try {
+            // Example usage
+            String htmlContent = "<table border='1'>" +
+                              "<tr><th bgcolor='#FFFF00'>Name</th><th>Age</th></tr>" +
+                              "<tr><td align='center'><b>John</b></td><td style='color:red;'>25</td></tr>" +
+                              "<tr><td>Jane</td><td>30</td></tr>" +
+                              "</table>";
+
+            convertHtmlToExcel(htmlContent, "output.xls");
+            System.out.println("Excel file generated successfully!");
+        } catch (IOException e) {
+            System.err.println("Error generating Excel file: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static void convertHtmlToExcel(String htmlContent, String outputPath) throws IOException {
+        // Parse HTML with JSoup
+        Document doc = Jsoup.parse(htmlContent);
+        Element table = doc.select("table").first();
+        
+        if (table == null) {
+            throw new IOException("No table found in HTML content");
+        }
+
+        // Create Excel workbook (.xls format)
+        try (HSSFWorkbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            
+            Sheet sheet = workbook.createSheet("Sheet1");
+            int rowNum = 0;
+
+            // Process each row
+            for (Element row : table.select("tr")) {
+                Row excelRow = sheet.createRow(rowNum++);
+                int colNum = 0;
+                
+                for (Element cell : row.select("td, th")) {
+                    Cell excelCell = excelRow.createCell(colNum++);
+                    applyCellContentAndStyle(excelCell, cell, workbook);
+                    
+                    // Handle column spans
+                    handleColumnSpans(cell, sheet, rowNum, colNum);
+                }
+            }
+
+            // Auto-size columns
+            autoSizeColumns(sheet, table);
+            
+            // Write the workbook
+            workbook.write(out);
+        }
+    }
+
+    private static void applyCellContentAndStyle(Cell excelCell, Element htmlCell, Workbook workbook) {
+        // Set cell value (trimming whitespace)
+        excelCell.setCellValue(htmlCell.text().trim());
+        
+        // Create and apply cell style
+        CellStyle style = workbook.createCellStyle();
+        applyAlignment(style, htmlCell);
+        applyBackgroundColor(style, htmlCell, workbook);
+        applyFontStyles(style, htmlCell, workbook);
+        excelCell.setCellStyle(style);
+    }
+
+    private static void applyAlignment(CellStyle style, Element htmlCell) {
+        // Horizontal alignment
+        String align = htmlCell.attr("align").toLowerCase();
+        switch (align) {
+            case "left": style.setAlignment(HorizontalAlignment.LEFT); break;
+            case "right": style.setAlignment(HorizontalAlignment.RIGHT); break;
+            case "center": style.setAlignment(HorizontalAlignment.CENTER); break;
+            default: style.setAlignment(HorizontalAlignment.GENERAL);
+        }
+
+        // Vertical alignment
+        String valign = htmlCell.attr("valign").toLowerCase();
+        switch (valign) {
+            case "top": style.setVerticalAlignment(VerticalAlignment.TOP); break;
+            case "bottom": style.setVerticalAlignment(VerticalAlignment.BOTTOM); break;
+            default: style.setVerticalAlignment(VerticalAlignment.CENTER);
+        }
+    }
+
+    private static void applyBackgroundColor(CellStyle style, Element htmlCell, Workbook workbook) {
+        String bgColor = htmlCell.attr("bgcolor");
+        if (!bgColor.isEmpty()) {
+            style.setFillForegroundColor(getIndexedColor(bgColor));
+            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        }
+    }
+
+    private static void applyFontStyles(CellStyle style, Element htmlCell, Workbook workbook) {
+        Font font = workbook.createFont();
+        boolean hasStyleChanges = false;
+
+        // Bold text
+        if (htmlCell.tagName().equals("th") || htmlCell.select("b, strong").first() != null) {
+            font.setBold(true);
+            hasStyleChanges = true;
+        }
+
+        // Italic text
+        if (htmlCell.select("i, em").first() != null) {
+            font.setItalic(true);
+            hasStyleChanges = true;
+        }
+
+        // Text color
+        String styleAttr = htmlCell.attr("style");
+        if (styleAttr.contains("color:")) {
+            String color = styleAttr.split("color:")[1].split(";")[0].trim();
+            font.setColor(getIndexedColor(color));
+            hasStyleChanges = true;
+        }
+
+        if (hasStyleChanges) {
+            style.setFont(font);
+        }
+    }
+
+    private static short getIndexedColor(String htmlColor) {
+        // Map HTML colors to Excel indexed colors
+        if (htmlColor.startsWith("#")) {
+            String hex = htmlColor.substring(1);
+            if (hex.equalsIgnoreCase("FF0000")) return IndexedColors.RED.getIndex();
+            if (hex.equalsIgnoreCase("00FF00")) return IndexedColors.GREEN.getIndex();
+            if (hex.equalsIgnoreCase("0000FF")) return IndexedColors.BLUE.getIndex();
+            if (hex.equalsIgnoreCase("FFFF00")) return IndexedColors.YELLOW.getIndex();
+        }
+        
+        // Named colors
+        switch (htmlColor.toLowerCase()) {
+            case "red": return IndexedColors.RED.getIndex();
+            case "green": return IndexedColors.GREEN.getIndex();
+            case "blue": return IndexedColors.BLUE.getIndex();
+            case "yellow": return IndexedColors.YELLOW.getIndex();
+            case "white": return IndexedColors.WHITE.getIndex();
+            default: return IndexedColors.BLACK.getIndex();
+        }
+    }
+
+    private static void handleColumnSpans(Element htmlCell, Sheet sheet, int rowNum, int colNum) {
+        int colspan = htmlCell.hasAttr("colspan") ? Integer.parseInt(htmlCell.attr("colspan")) : 1;
+        if (colspan > 1) {
+            sheet.addMergedRegion(new CellRangeAddress(
+                rowNum - 1, rowNum - 1,
+                colNum - 1, colNum - 1 + colspan - 1
+            ));
+        }
+    }
+
+    private static void autoSizeColumns(Sheet sheet, Element table) {
+        if (!table.select("tr").isEmpty()) {
+            int colCount = table.select("tr").first().select("td, th").size();
+            for (int i = 0; i < colCount; i++) {
+                sheet.autoSizeColumn(i);
+            }
+        }
+    }
+}
