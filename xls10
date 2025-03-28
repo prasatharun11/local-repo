@@ -1,0 +1,133 @@
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.ss.usermodel.*;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import javax.servlet.ServletException;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.awt.Color;
+import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@WebServlet("/generateXls")
+public class HtmlToXlsServlet extends HttpServlet {
+
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String htmlContent = request.getParameter("htmlContent");  // Get HTML input
+
+        if (htmlContent == null || htmlContent.trim().isEmpty()) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No HTML content provided");
+            return;
+        }
+
+        // Debug: Print HTML content to check if received correctly
+        System.out.println("Received HTML Content: " + htmlContent);
+
+        // Parse HTML table using Jsoup
+        Document doc = Jsoup.parse(htmlContent);
+        Element table = doc.select("table").first();
+
+        if (table == null) {
+            System.out.println("No table found in HTML.");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No table found in HTML");
+            return;
+        }
+
+        // Create an XLS workbook
+        HSSFWorkbook workbook = new HSSFWorkbook();
+        HSSFSheet sheet = workbook.createSheet("Sheet1");
+
+        Elements rows = table.select("tr");
+        int rowNum = 0;
+
+        for (Element row : rows) {
+            HSSFRow excelRow = sheet.createRow(rowNum++);
+            Elements cells = row.select("td, th");
+            int colNum = 0;
+
+            for (Element cell : cells) {
+                HSSFCell excelCell = excelRow.createCell(colNum);
+                excelCell.setCellValue(cell.text());
+
+                // Debug: Print extracted text
+                System.out.println("Row " + rowNum + ", Col " + colNum + ": " + cell.text());
+
+                // Apply styling
+                HSSFCellStyle cellStyle = workbook.createCellStyle();
+                HSSFFont font = workbook.createFont();
+
+                // Extract style attributes from inline CSS
+                String style = cell.attr("style");
+
+                // Set font color
+                if (style.contains("color:")) {
+                    String color = extractColor(style, "color:");
+                    if (color != null) {
+                        short poiColor = getExcelColor(color);
+                        font.setColor(poiColor);
+                    }
+                }
+
+                // Set background color
+                if (style.contains("background-color:")) {
+                    String bgColor = extractColor(style, "background-color:");
+                    if (bgColor != null) {
+                        cellStyle.setFillForegroundColor(getExcelColor(bgColor));
+                        cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                    }
+                }
+
+                cellStyle.setFont(font);
+                excelCell.setCellStyle(cellStyle);
+                colNum++;
+            }
+        }
+
+        // Auto-size columns
+        for (int i = 0; i < rows.get(0).select("td, th").size(); i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        // Debug: Print total rows processed
+        System.out.println("Total rows processed: " + rowNum);
+
+        // Set response headers for XLS download
+        response.setContentType("application/vnd.ms-excel");
+        response.setHeader("Content-Disposition", "attachment; filename=output.xls");
+
+        // Write workbook to output stream
+        ServletOutputStream out = response.getOutputStream();
+        workbook.write(out);
+        out.flush();
+        out.close();
+        workbook.close();
+
+        System.out.println("Excel file generated successfully!");
+    }
+
+    /**
+     * Extracts hex color code from inline CSS.
+     */
+    private String extractColor(String style, String property) {
+        Pattern pattern = Pattern.compile(property + "\\s*(#[0-9a-fA-F]{6})");
+        Matcher matcher = pattern.matcher(style);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * Converts CSS color (e.g., #FF0000) to Apache POI HSSF color index.
+     */
+    private short getExcelColor(String hexColor) {
+        if (hexColor == null || !hexColor.startsWith("#")) return HSSFColor.HSSFColorPredefined.BLACK.getIndex();
+
+        Color color = Color.decode(hexColor);
+        return (short) (color.getRed() << 16 | color.getGreen() << 8 | color.getBlue());
+    }
+}
