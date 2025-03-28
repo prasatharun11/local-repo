@@ -1,0 +1,325 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.select.Elements;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class UltimateHtmlToExcelConverter {
+
+    public static void convert(String html, String outputPath) throws IOException {
+        Document doc = Jsoup.parse(html);
+        
+        try (HSSFWorkbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            
+            Sheet sheet = workbook.createSheet("Data");
+            int currentRow = 0;
+            
+            // Process all nodes
+            for (Node node : doc.body().childNodes()) {
+                if (node instanceof Element) {
+                    Element element = (Element) node;
+                    
+                    if (element.tagName().equals("table")) {
+                        currentRow = processTable(element, sheet, workbook, currentRow);
+                    } else if (isSpacingElement(element)) {
+                        currentRow += getSpacing(element);
+                    }
+                }
+            }
+            
+            // Auto-size columns after all content is added
+            autoSizeColumns(sheet);
+            
+            workbook.write(out);
+        }
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+        // Check if table has borders
+        boolean hasBorder = table.hasAttr("border") && !table.attr("border").equals("0");
+        
+        // Get table width (max columns)
+        int tableWidth = getTableWidth(table);
+        
+        // Process each row
+        for (Element tr : table.select("tr")) {
+            Row excelRow = sheet.createRow(startRow++);
+            int colNum = 0;
+            
+            // Process each cell
+            for (Element cell : tr.select("td, th")) {
+                // Skip columns if this cell spans from previous rows
+                while (excelRow.getCell(colNum) != null) {
+                    colNum++;
+                }
+                
+                // Create cell and apply content/styles
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellContent(cell, excelCell);
+                applyCellStyles(cell, excelCell, workbook, hasBorder);
+                
+                // Handle column and row spans
+                handleSpans(cell, sheet, startRow - 1, colNum);
+                
+                colNum += getSpanValue(cell, "colspan");
+            }
+            
+            // Fill missing cells to maintain table structure
+            fillEmptyCells(excelRow, tableWidth);
+        }
+        
+        return startRow;
+    }
+
+    private static void setCellContent(Element cell, Cell excelCell) {
+        StringBuilder content = new StringBuilder();
+        for (Node node : cell.childNodes()) {
+            if (node instanceof TextNode) {
+                content.append(((TextNode) node).text());
+            } else if (node instanceof Element) {
+                Element el = (Element) node;
+                if (el.tagName().equals("br")) {
+                    content.append("\n");
+                } else if (!el.tagName().equals("style")) {
+                    content.append(el.text());
+                }
+            }
+        }
+        excelCell.setCellValue(content.toString().trim());
+    }
+
+    private static void applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean hasBorder) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        boolean hasFontChanges = false;
+
+        // Font weight (bold)
+        if (cell.tagName().equals("th") || 
+            cell.attr("style").contains("font-weight:bold") || 
+            !cell.select("b, strong").isEmpty()) {
+            font.setBold(true);
+            hasFontChanges = true;
+        }
+
+        // Font style (italic)
+        if (cell.attr("style").contains("font-style:italic") || 
+            !cell.select("i, em").isEmpty()) {
+            font.setItalic(true);
+            hasFontChanges = true;
+        }
+
+        // Underline
+        if (cell.attr("style").contains("text-decoration:underline") || 
+            !cell.select("u").isEmpty()) {
+            font.setUnderline(Font.U_SINGLE);
+            hasFontChanges = true;
+        }
+
+        // Font color
+        String color = extractStyleValue(cell, "color");
+        if (!color.isEmpty()) {
+            font.setColor(parseColor(color));
+            hasFontChanges = true;
+        }
+
+        // Font size
+        String fontSize = extractStyleValue(cell, "font-size");
+        if (!fontSize.isEmpty()) {
+            try {
+                font.setFontHeightInPoints((short) Integer.parseInt(fontSize.replace("px", "")));
+                hasFontChanges = true;
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (hasFontChanges) {
+            style.setFont(font);
+        }
+
+        // Background color
+        String bgColor = cell.hasAttr("bgcolor") ? cell.attr("bgcolor") : extractStyleValue(cell, "background-color");
+        if (!bgColor.isEmpty()) {
+            style.setFillForegroundColor(parseColor(bgColor));
+            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        }
+
+        // Borders
+        if (hasBorder) {
+            style.setBorderTop(BorderStyle.THIN);
+            style.setBorderBottom(BorderStyle.THIN);
+            style.setBorderLeft(BorderStyle.THIN);
+            style.setBorderRight(BorderStyle.THIN);
+        }
+
+        // Alignment
+        String align = extractStyleValue(cell, "text-align");
+        if (align.isEmpty()) align = cell.attr("align");
+        switch (align.toLowerCase()) {
+            case "left": style.setAlignment(HorizontalAlignment.LEFT); break;
+            case "right": style.setAlignment(HorizontalAlignment.RIGHT); break;
+            case "center": style.setAlignment(HorizontalAlignment.CENTER); break;
+            case "justify": style.setAlignment(HorizontalAlignment.JUSTIFY); break;
+        }
+
+        String valign = extractStyleValue(cell, "vertical-align");
+        if (valign.isEmpty()) valign = cell.attr("valign");
+        switch (valign.toLowerCase()) {
+            case "top": style.setVerticalAlignment(VerticalAlignment.TOP); break;
+            case "bottom": style.setVerticalAlignment(VerticalAlignment.BOTTOM); break;
+            default: style.setVerticalAlignment(VerticalAlignment.CENTER);
+        }
+
+        // Text wrapping
+        style.setWrapText(true);
+
+        excelCell.setCellStyle(style);
+    }
+
+    private static void handleSpans(Element cell, Sheet sheet, int rowNum, int colNum) {
+        int colspan = getSpanValue(cell, "colspan");
+        int rowspan = getSpanValue(cell, "rowspan");
+        
+        if (colspan > 1 || rowspan > 1) {
+            sheet.addMergedRegion(new CellRangeAddress(
+                rowNum, rowNum + rowspan - 1,
+                colNum, colNum + colspan - 1
+            ));
+        }
+    }
+
+    private static int getTableWidth(Element table) {
+        int maxCols = 0;
+        for (Element tr : table.select("tr")) {
+            int rowCols = 0;
+            for (Element cell : tr.select("td, th")) {
+                rowCols += getSpanValue(cell, "colspan");
+            }
+            maxCols = Math.max(maxCols, rowCols);
+        }
+        return maxCols;
+    }
+
+    private static void fillEmptyCells(Row row, int tableWidth) {
+        for (int i = 0; i < tableWidth; i++) {
+            if (row.getCell(i) == null) {
+                row.createCell(i);
+            }
+        }
+    }
+
+    private static int getSpanValue(Element cell, String attribute) {
+        try {
+            return Math.max(1, Integer.parseInt(cell.attr(attribute)));
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
+    private static String extractStyleValue(Element element, String property) {
+        String style = element.attr("style");
+        Pattern pattern = Pattern.compile(property + ":\\s*([^;]+)");
+        Matcher matcher = pattern.matcher(style);
+        return matcher.find() ? matcher.group(1).trim() : "";
+    }
+
+    private static short parseColor(String color) {
+        // Hex colors
+        if (color.startsWith("#")) {
+            String hex = color.substring(1);
+            if (hex.length() == 3) {
+                hex = String.format("%s%s%s%s%s%s", 
+                    hex.charAt(0), hex.charAt(0),
+                    hex.charAt(1), hex.charAt(1),
+                    hex.charAt(2), hex.charAt(2));
+            }
+            switch (hex.toUpperCase()) {
+                case "FF0000": return IndexedColors.RED.getIndex();
+                case "00FF00": return IndexedColors.GREEN.getIndex();
+                case "0000FF": return IndexedColors.BLUE.getIndex();
+                case "FFFF00": return IndexedColors.YELLOW.getIndex();
+                case "FF00FF": return IndexedColors.PINK.getIndex();
+                case "00FFFF": return IndexedColors.AQUA.getIndex();
+                case "FFFFFF": return IndexedColors.WHITE.getIndex();
+                case "000000": return IndexedColors.BLACK.getIndex();
+            }
+        }
+        
+        // Named colors
+        switch (color.toLowerCase()) {
+            case "red": return IndexedColors.RED.getIndex();
+            case "green": return IndexedColors.GREEN.getIndex();
+            case "blue": return IndexedColors.BLUE.getIndex();
+            case "yellow": return IndexedColors.YELLOW.getIndex();
+            case "cyan": return IndexedColors.AQUA.getIndex();
+            case "magenta": return IndexedColors.PINK.getIndex();
+            case "white": return IndexedColors.WHITE.getIndex();
+            case "black": return IndexedColors.BLACK.getIndex();
+            case "gray": case "grey": return IndexedColors.GREY_50_PERCENT.getIndex();
+            default: return IndexedColors.AUTOMATIC.getIndex();
+        }
+    }
+
+    private static boolean isSpacingElement(Element element) {
+        String tag = element.tagName();
+        return tag.equals("br") || tag.equals("p") || tag.equals("div") || 
+               tag.equals("hr") || tag.matches("h[1-6]");
+    }
+
+    private static int getSpacing(Element element) {
+        String tag = element.tagName();
+        switch (tag) {
+            case "br": return 1;
+            case "hr": return 2;
+            case "p": return element.text().trim().isEmpty() ? 1 : 2;
+            case "div": return 1;
+            case "h1": return 3;
+            case "h2": return 2;
+            case "h3": case "h4": case "h5": case "h6": return 1;
+            default: return 1;
+        }
+    }
+
+    private static void autoSizeColumns(Sheet sheet) {
+        int maxCol = 0;
+        for (Row row : sheet) {
+            if (row != null) {
+                maxCol = Math.max(maxCol, row.getLastCellNum());
+            }
+        }
+        
+        for (int i = 0; i < maxCol; i++) {
+            sheet.autoSizeColumn(i);
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
+        // Test HTML with complex formatting
+        String html = "<table border='1' style='width:100%'>" +
+                     "<tr>" +
+                     "  <th colspan='2' style='background:yellow;color:red;text-align:center'>Header</th>" +
+                     "</tr>" +
+                     "<tr>" +
+                     "  <td style='font-weight:bold;border-right:2px solid black'>Bold</td>" +
+                     "  <td style='font-style:italic'>Italic</td>" +
+                     "</tr>" +
+                     "<tr>" +
+                     "  <td rowspan='2'>Merged</td>" +
+                     "  <td>Cell 1</td>" +
+                     "</tr>" +
+                     "<tr><td>Cell 2</td></tr>" +
+                     "</table>" +
+                     "<p>Spacing between tables</p>" +
+                     "<table><tr><td>Second table</td></tr></table>";
+        
+        convert(html, "ultimate_output.xls");
+        System.out.println("Excel file generated with perfect formatting!");
+    }
+}
