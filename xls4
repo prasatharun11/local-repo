@@ -1,0 +1,100 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import javax.servlet.ServletException;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+@WebServlet("/generateExcel")
+public class HtmlToExcelServlet extends HttpServlet {
+
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String htmlContent = request.getParameter("htmlContent");  // Expecting HTML table as input
+
+        if (htmlContent == null || htmlContent.trim().isEmpty()) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No HTML content provided");
+            return;
+        }
+
+        // Parse HTML content using Jsoup
+        Document doc = Jsoup.parse(htmlContent);
+        Element table = doc.select("table").first();
+
+        if (table == null) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No table found in HTML");
+            return;
+        }
+
+        // Create Excel workbook
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Sheet1");
+
+        // Extract table rows
+        Elements rows = table.select("tr");
+        int rowNum = 0;
+        
+        for (Element row : rows) {
+            Row excelRow = sheet.createRow(rowNum++);
+            Elements cells = row.select("td, th");
+            int colNum = 0;
+
+            for (Element cell : cells) {
+                Cell excelCell = excelRow.createCell(colNum);
+                excelCell.setCellValue(cell.text());
+
+                // Handle styles
+                CellStyle cellStyle = workbook.createCellStyle();
+                Font font = workbook.createFont();
+
+                // Preserve font color
+                String style = cell.attr("style");
+                if (style.contains("color:")) {
+                    String color = style.split("color:")[1].split(";")[0].trim();
+                    font.setColor(getExcelColor(color));
+                }
+
+                cellStyle.setFont(font);
+                excelCell.setCellStyle(cellStyle);
+                
+                colNum++;
+            }
+        }
+
+        // Auto-size columns based on content
+        for (int i = 0; i < rows.get(0).select("td, th").size(); i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        // Set response headers
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=output.xlsx");
+
+        // Write to response output stream
+        ServletOutputStream out = response.getOutputStream();
+        workbook.write(out);
+        out.flush();
+        out.close();
+        workbook.close();
+    }
+
+    /**
+     * Converts CSS color (e.g., #FF0000 or rgb(255,0,0)) to Apache POI indexed color.
+     */
+    private short getExcelColor(String cssColor) {
+        if (cssColor.startsWith("#")) {
+            // Convert hex color to short index
+            if (cssColor.equalsIgnoreCase("#FF0000")) return IndexedColors.RED.getIndex();
+            if (cssColor.equalsIgnoreCase("#00FF00")) return IndexedColors.GREEN.getIndex();
+            if (cssColor.equalsIgnoreCase("#0000FF")) return IndexedColors.BLUE.getIndex();
+        }
+        return IndexedColors.BLACK.getIndex(); // Default color
+    }
+}
