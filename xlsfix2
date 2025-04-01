@@ -1,0 +1,36 @@
+private static short getHSSFColor(String htmlColor, HSSFWorkbook workbook) {
+    if (htmlColor.startsWith("#")) {
+        String hex = htmlColor.substring(1);
+        if (hex.length() == 3) {
+            hex = String.format("%s%s%s%s%s%s",
+                hex.charAt(0), hex.charAt(0),
+                hex.charAt(1), hex.charAt(1),
+                hex.charAt(2), hex.charAt(2));
+        }
+
+        int red = Integer.parseInt(hex.substring(0, 2), 16);
+        int green = Integer.parseInt(hex.substring(2, 4), 16);
+        int blue = Integer.parseInt(hex.substring(4, 6), 16);
+
+        // Modify the color palette for HSSF
+        HSSFColor customColor = workbook.getCustomPalette().findSimilarColor((byte) red, (byte) green, (byte) blue);
+        if (customColor == null) {
+            customColor = workbook.getCustomPalette().addColor((byte) red, (byte) green, (byte) blue);
+        }
+        return customColor.getIndex();
+    }
+
+    // Fallback to predefined colors
+    switch (htmlColor.toLowerCase()) {
+        case "red": return HSSFColor.HSSFColorPredefined.RED.getIndex();
+        case "green": return HSSFColor.HSSFColorPredefined.GREEN.getIndex();
+        case "blue": return HSSFColor.HSSFColorPredefined.BLUE.getIndex();
+        case "yellow": return HSSFColor.HSSFColorPredefined.YELLOW.getIndex();
+        case "cyan": return HSSFColor.HSSFColorPredefined.AQUA.getIndex();
+        case "magenta": return HSSFColor.HSSFColorPredefined.PINK.getIndex();
+        case "white": return HSSFColor.HSSFColorPredefined.WHITE.getIndex();
+        case "black": return HSSFColor.HSSFColorPredefined.BLACK.getIndex();
+        case "gray": case "grey": return HSSFColor.HSSFColorPredefined.GREY_50_PERCENT.getIndex();
+        default: return HSSFColor.HSSFColorPredefined.AUTOMATIC.getIndex();
+    }
+}
