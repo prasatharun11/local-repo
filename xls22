@@ -1,0 +1,338 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hssf.util.HSSFColor;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.RegionUtil;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.select.Elements;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+public class FixedBackgroundHtmlToExcelConverter {
+
+    private static final DecimalFormat DECIMAL_FORMAT = (DecimalFormat) DecimalFormat.getInstance(Locale.US);
+    private static final Pattern NUMERIC_PATTERN = Pattern.compile("^[+-]?\\d{1,3}(,\\d{3})*(\\.\\d+)?$");
+
+    public static void convert(String html, String outputPath) throws IOException {
+        Document doc = Jsoup.parse(html);
+        try (HSSFWorkbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            Sheet sheet = workbook.createSheet("Data");
+            sheet.setDisplayGridlines(false); // Hide gridlines
+            int currentRow = 0;
+            for (Node node : doc.body().childNodes()) {
+                if (node instanceof Element) {
+                    Element element = (Element) node;
+                    if (element.tagName().equals("table")) {
+                        currentRow = processTable(element, sheet, workbook, currentRow);
+                    } else if (isSpacingElement(element)) {
+                        currentRow += getSpacing(element);
+                    }
+                }
+            }
+            workbook.write(out);
+        }
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+        boolean tableHasBorder = table.hasAttr("border") && !table.attr("border").equals("0");
+        int tableWidth = getTableWidth(table);
+        List<CellRangeAddress> mergedRegions = new ArrayList<>();
+        int firstRow = startRow;
+        List<List<Element>> tableRows = new ArrayList<>();
+        for (Element tr : table.select("tr")) {
+            tableRows.add(tr.select("td, th"));
+        }
+
+        for (int i = 0; i < tableRows.size(); i++) {
+            Row excelRow = sheet.createRow(startRow++);
+            int colNum = 0;
+            List<Element> cells = tableRows.get(i);
+            for (Element cell : cells) {
+                while (excelRow.getCell(colNum) != null) colNum++;
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellValue(cell, excelCell);
+                applyCellStyles(cell, excelCell, workbook, false); // Don't apply individual cell borders here
+                int colspan = getSpanValue(cell, "colspan");
+                int rowspan = getSpanValue(cell, "rowspan");
+                if (colspan > 1 || rowspan > 1) {
+                    mergedRegions.add(new CellRangeAddress(
+                            startRow - 1, startRow - 1 + rowspan - 1,
+                            colNum, colNum + colspan - 1
+                    ));
+                }
+                colNum += colspan;
+            }
+            fillEmptyCells(excelRow, tableWidth);
+        }
+
+        if (tableHasBorder) {
+            // Apply borders to all cells within the table's range
+            for (int r = firstRow; r < startRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row != null) {
+                    for (int c = 0; c < tableWidth; c++) {
+                        Cell cell = row.getCell(c);
+                        if (cell != null) {
+                            CellStyle style = cell.getCellStyle();
+                            style.setBorderTop(BorderStyle.THIN);
+                            style.setBorderBottom(BorderStyle.THIN);
+                            style.setBorderLeft(BorderStyle.THIN);
+                            style.setBorderRight(BorderStyle.THIN);
+                            cell.setCellStyle(style);
+                        }
+                    }
+                }
+            }
+            // Apply borders to merged regions to override individual cell borders
+            for (CellRangeAddress region : mergedRegions) {
+                applyBorderToMergedRegion(sheet, region);
+            }
+        }
+
+        for (CellRangeAddress region : mergedRegions) {
+            sheet.addMergedRegion(region);
+        }
+
+        autoSizeColumns(sheet, tableWidth);
+        return startRow;
+    }
+
+    private static void applyBorderToMergedRegion(Sheet sheet, CellRangeAddress region) {
+        RegionUtil.setBorderBottom(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderLeft(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderRight(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderTop(BorderStyle.THIN, region, sheet);
+    }
+
+    private static void setCellValue(Element cell, Cell excelCell) {
+        String text = cell.text().trim();
+        if (isNumeric(text)) {
+            try {
+                Number number = DECIMAL_FORMAT.parse(text);
+                excelCell.setCellValue(number.doubleValue());
+                return;
+            } catch (ParseException ignored) {
+            }
+        }
+        excelCell.setCellValue(text);
+    }
+
+    private static void applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean applyBorders) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        boolean fontChanged = false;
+
+        if (cell.tagName().equals("th") || hasStyle(cell, "font-weight", "bold")) {
+            font.setBold(true);
+            fontChanged = true;
+        }
+        if (hasStyle(cell, "font-style", "italic")) {
+            font.setItalic(true);
+            fontChanged = true;
+        }
+
+        String color = extractStyle(cell, "color");
+        if (!color.isEmpty()) {
+            font.setColor(getHSSFColor(color, workbook));
+            fontChanged = true;
+        }
+
+        String bgColor = cell.hasAttr("bgcolor") ? cell.attr("bgcolor") : extractStyle(cell, "background-color");
+        if (!bgColor.isEmpty()) {
+            style.setFillForegroundColor(getHSSFColor(bgColor, workbook));
+            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        }
+
+        String align = extractStyle(cell, "text-align");
+        if (align.isEmpty()) align = cell.attr("align");
+        if (align.equalsIgnoreCase("left")) style.setAlignment(HorizontalAlignment.LEFT);
+        else if (align.equalsIgnoreCase("right")) style.setAlignment(HorizontalAlignment.RIGHT);
+        else if (align.equalsIgnoreCase("center")) style.setAlignment(HorizontalAlignment.CENTER);
+        else if (align.equalsIgnoreCase("justify")) style.setAlignment(HorizontalAlignment.JUSTIFY);
+
+        if (excelCell.getCellType() == CellType.NUMERIC) {
+            style.setDataFormat(workbook.createDataFormat().getFormat("#,##0.00"));
+        }
+
+        if (fontChanged) style.setFont(font);
+        style.setWrapText(true);
+        excelCell.setCellStyle(style); // Don't apply borders to individual cells here
+    }
+
+    private static short getHSSFColor(String htmlColor, HSSFWorkbook workbook) {
+        if (htmlColor.startsWith("#")) {
+            String hex = htmlColor.substring(1);
+            if (hex.length() == 3) {
+                hex = String.format("%s%s%s%s%s%s",
+                        hex.charAt(0), hex.charAt(0),
+                        hex.charAt(1), hex.charAt(1),
+                        hex.charAt(2), hex.charAt(2));
+            }
+
+            int red = Integer.parseInt(hex.substring(0, 2), 16);
+            int green = Integer.parseInt(hex.substring(2, 4), 16);
+            int blue = Integer.parseInt(hex.substring(4, 6), 16);
+
+            // Modify the color palette for HSSF
+            HSSFColor customColor = workbook.getCustomPalette().findSimilarColor((byte) red, (byte) green, (byte) blue);
+            if (customColor == null) {
+                customColor = workbook.getCustomPalette().addColor((byte) red, (byte) green, (byte) blue);
+            }
+            return customColor.getIndex();
+        }
+
+        // Fallback to predefined colors
+        switch (htmlColor.toLowerCase()) {
+            case "red":
+                return HSSFColor.HSSFColorPredefined.RED.getIndex();
+            case "green":
+                return HSSFColor.HSSFColorPredefined.GREEN.getIndex();
+            case "blue":
+                return HSSFColor.HSSFColorPredefined.BLUE.getIndex();
+            case "yellow":
+                return HSSFColor.HSSFColorPredefined.YELLOW.getIndex();
+            case "cyan":
+                return HSSFColor.HSSFColorPredefined.AQUA.getIndex();
+            case "magenta":
+                return HSSFColor.HSSFColorPredefined.PINK.getIndex();
+            case "white":
+                return HSSFColor.HSSFColorPredefined.WHITE.getIndex();
+            case "black":
+                return HSSFColor.HSSFColorPredefined.BLACK.getIndex();
+            case "gray":
+            case "grey":
+                return HSSFColor.HSSFColorPredefined.GREY_50_PERCENT.getIndex();
+            default:
+                return HSSFColor.HSSFColorPredefined.AUTOMATIC.getIndex();
+        }
+    }
+
+    private static boolean isNumeric(String text) {
+        return NUMERIC_PATTERN.matcher(text).matches();
+    }
+
+    private static boolean hasStyle(Element element, String property, String value) {
+        return element.attr("style").contains(property + ":" + value);
+    }
+
+    private static String extractStyle(Element element, String property) {
+        String style = element.attr("style");
+        int start = style.indexOf(property + ":");
+        if (start >= 0) {
+            start += property.length() + 1;
+            int end = style.indexOf(';', start);
+            if (end < 0) end = style.length();
+            return style.substring(start, end).trim();
+        }
+        return "";
+    }
+
+    private static int getTableWidth(Element table) {
+        int maxCols = 0;
+        for (Element tr : table.select("tr")) {
+            int rowCols = 0;
+            for (Element cell : tr.select("td, th")) {
+                rowCols += getSpanValue(cell, "colspan");
+            }
+            maxCols = Math.max(maxCols, rowCols);
+        }
+        return maxCols;
+    }
+
+    private static void fillEmptyCells(Row row, int tableWidth) {
+        for (int i = 0; i < tableWidth; i++) {
+            if (row.getCell(i) == null) {
+                row.createCell(i);
+            }
+        }
+    }
+
+    private static int getSpanValue(Element cell, String attribute) {
+        try {
+            return Math.max(1, Integer.parseInt(cell.attr(attribute)));
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
+    private static boolean isInMergedRegion(List<CellRangeAddress> regions, int row, int col) {
+        for (CellRangeAddress region : regions) {
+            if (region.isInRange(row, col)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isSpacingElement(Element element) {
+        String tag = element.tagName();
+        return tag.equals("br") || tag.equals("p") || tag.equals("div") ||
+                tag.equals("hr") || tag.matches("h[1-6]");
+    }
+
+    private static int getSpacing(Element element) {
+        String tag = element.tagName();
+        switch (tag) {
+            case "br":
+                return 1;
+            case "hr":
+                return 2;
+            case "p":
+                return element.text().trim().isEmpty() ? 1 : 2;
+            case "div":
+                return 1;
+            case "h1":
+                return 3;
+            case "h2":
+                return 2;
+            case "h3":
+            case "h4":
+            case "h5":
+            case "h6":
+                return 1;
+            default:
+                return 1;
+        }
+    }
+
+    private static void autoSizeColumns(Sheet sheet, int colCount) {
+        for (int i = 0; i < colCount; i++) {
+            sheet.autoSizeColumn(i);
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
+        String htmlWithBorder = "<table border='1'>" +
+                "<tr><th bgcolor='yellow' colspan='2'>Header</th></tr>" +
+                "<tr><td style='background-color:#00FF00' rowspan='2'>1,000.50</td><td>Data 2</td></tr>" +
+                "<tr><td>Data 3</td></tr>" +
+                "<tr><td colspan='2' align='center'>Footer</td></tr>" +
+                "</table>";
+        convert(htmlWithBorder, "output_with_border.xls");
+
+        String htmlWithoutBorder = "<table>" +
+                "<tr><th>Header 1</th><th>Header 2</th></tr>" +
+                "<tr><td>Data A</td><td>Data B</td></tr>" +
+                "</table>";
+        convert(htmlWithoutBorder, "output_without_border.xls");
+
+        String htmlComplexMerge = "<table border='1'>" +
+                "<tr><th>A</th><th>B</th><th>C</th></tr>" +
+                "<tr><td rowspan='2'>1</td><td>2</td><td>3</td></tr>" +
+                "<tr><td>4</td><td colspan='2'>5</td></tr>" +
+                "<tr><td colspan='3'>6</td></tr>" +
+                "</table>";
+        convert(htmlComplexMerge, "output_complex_merge.xls");
+    }
+}
