@@ -1,0 +1,10 @@
+private static double parseFontSize(String fontSizeStr) {
+        fontSizeStr = fontSizeStr.toLowerCase().trim();
+        if (fontSizeStr.endsWith("px")) {
+            return Double.parseDouble(fontSizeStr.substring(0, fontSizeStr.length() - 2));
+        } else if (fontSizeStr.endsWith("pt")) {
+            return Double.parseDouble(fontSizeStr.substring(0, fontSizeStr.length() - 2));
+        } else {
+            // Assume points if no unit is specified
+            return Double.parseDouble(fontSizeStr);
+        }
