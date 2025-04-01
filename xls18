@@ -1,0 +1,110 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook; import org.apache.poi.hssf.util.HSSFColor; import org.apache.poi.ss.usermodel.*; import org.apache.poi.ss.util.CellRangeAddress; import org.jsoup.Jsoup; import org.jsoup.nodes.Document; import org.jsoup.nodes.Element; import org.jsoup.nodes.Node; import java.io.FileOutputStream; import java.io.IOException; import java.util.ArrayList; import java.util.List;
+
+public class HtmlToExcelConverter {
+
+public static void convert(String html, String outputPath) throws IOException {
+    Document doc = Jsoup.parse(html);
+    try (HSSFWorkbook workbook = new HSSFWorkbook(); FileOutputStream out = new FileOutputStream(outputPath)) {
+        Sheet sheet = workbook.createSheet("Data");
+        int currentRow = 0;
+        for (Element table : doc.select("table")) {
+            currentRow = processTable(table, sheet, workbook, currentRow);
+        }
+        workbook.write(out);
+    }
+}
+
+private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+    boolean hasBorder = table.hasAttr("border");
+    List<CellRangeAddress> mergedRegions = new ArrayList<>();
+    int firstRow = startRow;
+    
+    for (Element tr : table.select("tr")) {
+        Row row = sheet.createRow(startRow++);
+        int colNum = 0;
+        
+        for (Element cell : tr.select("td, th")) {
+            while (row.getCell(colNum) != null) colNum++;
+            Cell excelCell = row.createCell(colNum);
+            applyCellStyles(cell, excelCell, workbook, hasBorder);
+            
+            int colspan = cell.hasAttr("colspan") ? Integer.parseInt(cell.attr("colspan")) : 1;
+            int rowspan = cell.hasAttr("rowspan") ? Integer.parseInt(cell.attr("rowspan")) : 1;
+            
+            if (colspan > 1 || rowspan > 1) {
+                mergedRegions.add(new CellRangeAddress(
+                    startRow - 1, startRow - 1 + rowspan - 1, colNum, colNum + colspan - 1
+                ));
+            }
+            colNum += colspan;
+        }
+    }
+
+    if (hasBorder) {
+        applyTableBorders(sheet, firstRow, startRow - firstRow, mergedRegions);
+    }
+
+    for (CellRangeAddress region : mergedRegions) {
+        sheet.addMergedRegion(region);
+    }
+    return startRow;
+}
+
+private static void applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean applyBorders) {
+    CellStyle style = workbook.createCellStyle();
+    Font font = workbook.createFont();
+
+    if (cell.tagName().equals("th")) {
+        font.setBold(true);
+    }
+
+    String bgColor = cell.hasAttr("bgcolor") ? cell.attr("bgcolor") : "";
+    if (!bgColor.isEmpty()) {
+        style.setFillForegroundColor(HSSFColor.HSSFColorPredefined.YELLOW.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+    }
+    
+    if (applyBorders) {
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+    }
+    
+    style.setFont(font);
+    excelCell.setCellStyle(style);
+    excelCell.setCellValue(cell.text());
+}
+
+private static void applyTableBorders(Sheet sheet, int startRow, int rowCount, List<CellRangeAddress> mergedRegions) {
+    for (int r = startRow; r < startRow + rowCount; r++) {
+        Row row = sheet.getRow(r);
+        if (row == null) continue;
+        for (Cell cell : row) {
+            if (cell == null || isInMergedRegion(mergedRegions, r, cell.getColumnIndex())) continue;
+            CellStyle style = cell.getCellStyle();
+            style.setBorderTop(BorderStyle.THIN);
+            style.setBorderBottom(BorderStyle.THIN);
+            style.setBorderLeft(BorderStyle.THIN);
+            style.setBorderRight(BorderStyle.THIN);
+            cell.setCellStyle(style);
+        }
+    }
+}
+
+private static boolean isInMergedRegion(List<CellRangeAddress> regions, int row, int col) {
+    for (CellRangeAddress region : regions) {
+        if (region.isInRange(row, col)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+public static void main(String[] args) throws IOException {
+    String html = "<table border='1'><tr><th bgcolor='yellow'>Header</th></tr><tr><td>Data</td></tr></table>";
+    convert(html, "output.xls");
+}
+
+}
+
