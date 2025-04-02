@@ -1,0 +1,17 @@
+import java.util.regex.*;
+
+public class RegexTest {
+    public static void main(String[] args) {
+        String regex = "^(?:\\d{1,3}(?:,\\d{3})*|\\d+)$";
+        String[] testCases = {
+            "123", "1,234", "12,345", "123,456,789",
+            "123.45", "1,23", "abc", "123,456.78"
+        };
+
+        Pattern pattern = Pattern.compile(regex);
+        for (String test : testCases) {
+            Matcher matcher = pattern.matcher(test);
+            System.out.println(test + " => " + matcher.matches());
+        }
+    }
+}
