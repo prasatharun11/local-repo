@@ -1,0 +1,255 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hssf.util.HSSFColor;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.select.Elements;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.Date;
+
+public class HtmlToExcelConverter {
+
+    private static final DecimalFormat DECIMAL_FORMAT = (DecimalFormat) DecimalFormat.getInstance(Locale.US);
+    private static final Pattern NUMERIC_PATTERN = Pattern.compile("^[+-]?\\d{1,3}(,\\d{3})*(\\.\\d+)?$");
+    private static final Pattern DATE_PATTERN = Pattern.compile("^(\\d{1,2})/(\\d{1,2})/(\\d{2,4})$");
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MM/dd/yyyy");
+
+    public static void convert(String html, String outputPath) throws IOException {
+        Document doc = Jsoup.parse(html);
+        try (HSSFWorkbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            
+            Sheet sheet = workbook.createSheet("Data");
+            sheet.setDisplayGridlines(false);
+            
+            int currentRow = 0;
+            for (Node node : doc.body().childNodes()) {
+                if (node instanceof Element) {
+                    Element element = (Element) node;
+                    if (element.tagName().equals("table")) {
+                        currentRow = processTable(element, sheet, workbook, currentRow);
+                    } else if (isSpacingElement(element)) {
+                        currentRow += getSpacing(element);
+                    }
+                }
+            }
+            workbook.write(out);
+        }
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+        boolean tableHasBorder = table.hasAttr("border") && !table.attr("border").equals("0");
+        int tableWidth = getTableWidth(table);
+        List<CellRangeAddress> mergedRegions = new ArrayList<>();
+        int firstRow = startRow;
+
+        // Process all rows in the table
+        for (Element tr : table.select("tr")) {
+            Row excelRow = sheet.createRow(startRow);
+            // Set row height based on content
+            excelRow.setHeightInPoints((short) 15 * 20); // 15pt default height
+            
+            int colNum = 0;
+            for (Element cell : tr.select("td, th")) {
+                // Skip already occupied cells (from rowspan)
+                while (excelRow.getCell(colNum) != null) colNum++;
+                
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellValue(cell, excelCell);
+                
+                // Apply styles without borders initially
+                applyCellStyles(cell, excelCell, workbook, false);
+                
+                // Handle rowspan and colspan
+                int colspan = getSpanValue(cell, "colspan");
+                int rowspan = getSpanValue(cell, "rowspan");
+                
+                if (colspan > 1 || rowspan > 1) {
+                    mergedRegions.add(new CellRangeAddress(
+                        startRow, startRow + rowspan - 1,
+                        colNum, colNum + colspan - 1
+                    ));
+                }
+                colNum += colspan;
+            }
+            fillEmptyCells(excelRow, tableWidth);
+            startRow++;
+        }
+
+        // Apply merged regions
+        for (CellRangeAddress region : mergedRegions) {
+            sheet.addMergedRegion(region);
+        }
+
+        // Apply borders only if table has borders
+        if (tableHasBorder) {
+            applyTableBorders(sheet, firstRow, startRow - firstRow, tableWidth, mergedRegions);
+        }
+
+        // Auto-size columns
+        for (int i = 0; i < tableWidth; i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        return startRow;
+    }
+
+    private static void applyTableBorders(Sheet sheet, int startRow, int rowCount, int colCount, 
+                                        List<CellRangeAddress> mergedRegions) {
+        for (int r = startRow; r < startRow + rowCount; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            
+            for (int c = 0; c < colCount; c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) continue;
+                
+                CellStyle style = cell.getCellStyle();
+                BorderStyle border = BorderStyle.THIN;
+                
+                // Top border for first row or top of merged region
+                if (r == startRow || isTopOfMergedRegion(mergedRegions, r, c)) {
+                    style.setBorderTop(border);
+                }
+                
+                // Bottom border for last row or bottom of merged region
+                if (r == startRow + rowCount - 1 || isBottomOfMergedRegion(mergedRegions, r, c)) {
+                    style.setBorderBottom(border);
+                }
+                
+                // Left border for first column or left of merged region
+                if (c == 0 || isLeftOfMergedRegion(mergedRegions, r, c)) {
+                    style.setBorderLeft(border);
+                }
+                
+                // Right border for last column or right of merged region
+                if (c == colCount - 1 || isRightOfMergedRegion(mergedRegions, r, c)) {
+                    style.setBorderRight(border);
+                }
+                
+                cell.setCellStyle(style);
+            }
+        }
+    }
+
+    private static void setCellValue(Element cell, Cell excelCell) {
+        String text = cell.text().trim();
+        if (isNumeric(text)) {
+            try {
+                Number number = DECIMAL_FORMAT.parse(text);
+                excelCell.setCellValue(number.doubleValue());
+                return;
+            } catch (ParseException ignored) {}
+        } else if (isDate(text)) {
+            try {
+                Date date = DATE_FORMAT.parse(text);
+                excelCell.setCellValue(date);
+                return;
+            } catch (ParseException e) {
+                // Fall through to text if date parsing fails
+            }
+        }
+        excelCell.setCellValue(text);
+    }
+
+    private static void applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean applyBorders) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        boolean fontChanged = false;
+
+        // Set default font to Aptos Narrow
+        font.setFontName("Aptos Narrow");
+        fontChanged = true;
+
+        // Apply font size if specified
+        String fontSize = extractStyle(cell, "font-size");
+        if (!fontSize.isEmpty()) {
+            try {
+                fontSize = fontSize.replace("px", "").trim();
+                float size = Float.parseFloat(fontSize);
+                font.setFontHeightInPoints((short) size);
+                fontChanged = true;
+            } catch (NumberFormatException e) {
+                // Use default size if parsing fails
+            }
+        }
+
+        if (cell.tagName().equals("th") || hasStyle(cell, "font-weight", "bold")) {
+            font.setBold(true);
+            fontChanged = true;
+        }
+        if (hasStyle(cell, "font-style", "italic")) {
+            font.setItalic(true);
+            fontChanged = true;
+        }
+
+        String color = extractStyle(cell, "color");
+        if (!color.isEmpty()) {
+            font.setColor(getHSSFColor(color, (HSSFWorkbook) workbook));
+            fontChanged = true;
+        }
+
+        String bgColor = cell.hasAttr("bgcolor") ? cell.attr("bgcolor") : extractStyle(cell, "background-color");
+        if (!bgColor.isEmpty()) {
+            style.setFillForegroundColor(getHSSFColor(bgColor, (HSSFWorkbook) workbook));
+            style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        }
+
+        // Handle date formatting and alignment
+        if (excelCell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(excelCell)) {
+            style.setDataFormat(workbook.createDataFormat().getFormat("MM/dd/yyyy"));
+            style.setAlignment(HorizontalAlignment.RIGHT);
+        } else {
+            String align = extractStyle(cell, "text-align");
+            if (align.isEmpty()) align = cell.attr("align");
+            if (align.equalsIgnoreCase("left")) style.setAlignment(HorizontalAlignment.LEFT);
+            else if (align.equalsIgnoreCase("right")) style.setAlignment(HorizontalAlignment.RIGHT);
+            else if (align.equalsIgnoreCase("center")) style.setAlignment(HorizontalAlignment.CENTER);
+            else if (align.equalsIgnoreCase("justify")) style.setAlignment(HorizontalAlignment.JUSTIFY);
+        }
+
+        if (excelCell.getCellType() == CellType.NUMERIC && !DateUtil.isCellDateFormatted(excelCell)) {
+            style.setDataFormat(workbook.createDataFormat().getFormat("#,##0.00"));
+        }
+
+        if (fontChanged) style.setFont(font);
+        style.setWrapText(true);
+        
+        if (!applyBorders) {
+            style.setBorderTop(BorderStyle.NONE);
+            style.setBorderBottom(BorderStyle.NONE);
+            style.setBorderLeft(BorderStyle.NONE);
+            style.setBorderRight(BorderStyle.NONE);
+        }
+        
+        excelCell.setCellStyle(style);
+    }
+
+    // ... [Keep all other helper methods unchanged from previous implementation] ...
+
+    public static void main(String[] args) throws IOException {
+        String html = "<table border='1'>" +
+                     "<tr><th style='font-size:14px'>Date</th><th>Amount</th></tr>" +
+                     "<tr><td style='text-align:right'>05/15/2023</td><td>1,000.50</td></tr>" +
+                     "<tr><td style='text-align:right'>12/31/2023</td><td>2,500.75</td></tr>" +
+                     "</table>" +
+                     "<p>This is non-table content</p>" +
+                     "<table border='1'>" +
+                     "<tr><th>Product</th><th>Price</th></tr>" +
+                     "<tr><td>Widget</td><td>$19.99</td></tr>" +
+                     "</table>";
+        
+        convert(html, "output.xls");
+    }
+}
