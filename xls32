@@ -1,0 +1,306 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hssf.util.HSSFColor;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.regex.Pattern;
+
+public class HtmlToExcelConverter {
+
+    private static final DecimalFormat DECIMAL_FORMAT = (DecimalFormat) DecimalFormat.getInstance(Locale.US);
+    private static final Pattern NUMERIC_PATTERN = Pattern.compile("^[+-]?\\d{1,3}(,\\d{3})*(\\.\\d+)?$");
+    private static final Pattern DATE_PATTERN = Pattern.compile("^(\\d{4})-(\\d{2})-(\\d{2})$"); // Updated for yyyy-mm-dd
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd"); // Updated format
+    private static final float BASE_ROW_HEIGHT = 15f;
+    private static final float FONT_HEIGHT_MULTIPLIER = 1.2f;
+
+    public static void convert(String html, String outputPath) throws IOException {
+        Document doc = Jsoup.parse(html);
+        try (HSSFWorkbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            
+            Sheet sheet = workbook.createSheet("Data");
+            sheet.setDisplayGridlines(false);
+            
+            int currentRow = 0;
+            for (Node node : doc.body().childNodes()) {
+                if (node instanceof Element) {
+                    Element element = (Element) node;
+                    if (element.tagName().equals("table")) {
+                        currentRow = processTable(element, sheet, workbook, currentRow);
+                    } else if (isSpacingElement(element)) {
+                        currentRow += getSpacing(element);
+                    }
+                }
+            }
+            workbook.write(out);
+        }
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+        boolean tableHasBorder = table.hasAttr("border") && !table.attr("border").equals("0");
+        int tableWidth = getTableWidth(table);
+        List<CellRangeAddress> mergedRegions = new ArrayList<>();
+
+        for (Element tr : table.select("tr")) {
+            Row excelRow = sheet.createRow(startRow);
+            float maxFontHeight = 0;
+            int maxLineCount = 1;
+            
+            int colNum = 0;
+            for (Element cell : tr.select("td, th")) {
+                while (excelRow.getCell(colNum) != null) colNum++;
+                
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellValue(cell, excelCell);
+                
+                CellStyle style = createCellStyle(workbook, cell, tableHasBorder);
+                excelCell.setCellStyle(style);
+                
+                // Count line breaks and track max font height
+                int lineCount = countLineBreaks(cell);
+                maxLineCount = Math.max(maxLineCount, lineCount);
+                Font font = workbook.getFontAt(style.getFontIndex());
+                maxFontHeight = Math.max(maxFontHeight, font.getFontHeightInPoints());
+                
+                // Handle merged cells
+                int colspan = getSpanValue(cell, "colspan");
+                int rowspan = getSpanValue(cell, "rowspan");
+                
+                if (colspan > 1 || rowspan > 1) {
+                    CellRangeAddress region = new CellRangeAddress(
+                        startRow, startRow + rowspan - 1,
+                        colNum, colNum + colspan - 1
+                    );
+                    mergedRegions.add(region);
+                    sheet.addMergedRegion(region);
+                    
+                    if (tableHasBorder) applyBorderToMergedRegion(sheet, region, workbook);
+                }
+                colNum += colspan;
+            }
+            
+            // Set row height considering content
+            excelRow.setHeightInPoints(
+                Math.max(BASE_ROW_HEIGHT, maxFontHeight * FONT_HEIGHT_MULTIPLIER * maxLineCount)
+            );
+            
+            startRow++;
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < tableWidth; i++) {
+            sheet.autoSizeColumn(i);
+        }
+        
+        return startRow;
+    }
+
+    private static void setCellValue(Element cell, Cell excelCell) {
+        StringBuilder cellContent = new StringBuilder();
+        
+        // Process content with <br> tags
+        for (Node node : cell.childNodes()) {
+            if (node instanceof TextNode) {
+                cellContent.append(((TextNode) node).text());
+            } else if (node instanceof Element && ((Element) node).tagName().equals("br")) {
+                cellContent.append("\n");
+            }
+        }
+        
+        String text = cellContent.toString().trim();
+        
+        if (isNumeric(text)) {
+            try {
+                Number number = DECIMAL_FORMAT.parse(text);
+                excelCell.setCellValue(number.doubleValue());
+                return;
+            } catch (ParseException ignored) {}
+        } else if (isDate(text)) {
+            try {
+                Date date = DATE_FORMAT.parse(text);
+                excelCell.setCellValue(date);
+                return;
+            } catch (ParseException e) {
+                // Fall back to text if parsing fails
+            }
+        }
+        excelCell.setCellValue(text);
+    }
+
+    private static CellStyle createCellStyle(Workbook workbook, Element cell, boolean applyBorders) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        
+        // Base font settings
+        font.setFontName("Aptos Narrow");
+        font.setFontHeightInPoints((short)11); // Default size
+        
+        // Custom font size
+        String fontSize = extractStyle(cell, "font-size");
+        if (!fontSize.isEmpty()) {
+            try {
+                float size = Float.parseFloat(fontSize.replace("px", "").trim());
+                font.setFontHeightInPoints((short)size);
+            } catch (NumberFormatException ignored) {}
+        }
+        
+        // Bold for headers
+        if (cell.tagName().equals("th") || hasStyle(cell, "font-weight", "bold")) {
+            font.setBold(true);
+        }
+        
+        // Date formatting
+        if (cell.text().matches(DATE_PATTERN.pattern())) {
+            style.setDataFormat(workbook.createDataFormat().getFormat("yyyy-mm-dd"));
+            style.setAlignment(HorizontalAlignment.RIGHT);
+        }
+        
+        style.setFont(font);
+        style.setWrapText(true); // For line breaks
+        
+        if (applyBorders) {
+            style.setBorderTop(BorderStyle.THIN);
+            style.setBorderBottom(BorderStyle.THIN);
+            style.setBorderLeft(BorderStyle.THIN);
+            style.setBorderRight(BorderStyle.THIN);
+        }
+        
+        return style;
+    }
+
+    private static void applyBorderToMergedRegion(Sheet sheet, CellRangeAddress region, Workbook workbook) {
+        BorderStyle border = BorderStyle.THIN;
+        
+        // Top border
+        for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
+            Cell cell = sheet.getRow(region.getFirstRow()).getCell(c);
+            CellStyle style = workbook.createCellStyle();
+            style.cloneStyleFrom(cell.getCellStyle());
+            style.setBorderTop(border);
+            cell.setCellStyle(style);
+        }
+        
+        // Bottom border
+        for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
+            Cell cell = sheet.getRow(region.getLastRow()).getCell(c);
+            CellStyle style = workbook.createCellStyle();
+            style.cloneStyleFrom(cell.getCellStyle());
+            style.setBorderBottom(border);
+            cell.setCellStyle(style);
+        }
+        
+        // Left border
+        for (int r = region.getFirstRow(); r <= region.getLastRow(); r++) {
+            Cell cell = sheet.getRow(r).getCell(region.getFirstColumn());
+            CellStyle style = workbook.createCellStyle();
+            style.cloneStyleFrom(cell.getCellStyle());
+            style.setBorderLeft(border);
+            cell.setCellStyle(style);
+        }
+        
+        // Right border
+        for (int r = region.getFirstRow(); r <= region.getLastRow(); r++) {
+            Cell cell = sheet.getRow(r).getCell(region.getLastColumn());
+            CellStyle style = workbook.createCellStyle();
+            style.cloneStyleFrom(cell.getCellStyle());
+            style.setBorderRight(border);
+            cell.setCellStyle(style);
+        }
+    }
+
+    // Helper methods (unchanged from previous versions)
+    private static boolean isNumeric(String text) {
+        return NUMERIC_PATTERN.matcher(text).matches();
+    }
+
+    private static boolean isDate(String text) {
+        return DATE_PATTERN.matcher(text).matches();
+    }
+
+    private static int countLineBreaks(Element cell) {
+        int count = 1;
+        for (Node node : cell.childNodes()) {
+            if (node instanceof Element && ((Element) node).tagName().equals("br")) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static String extractStyle(Element element, String property) {
+        String style = element.attr("style");
+        String[] parts = style.split(";");
+        for (String part : parts) {
+            part = part.trim();
+            if (part.startsWith(property + ":")) {
+                return part.substring(property.length() + 1).trim();
+            }
+        }
+        return "";
+    }
+
+    private static boolean hasStyle(Element element, String property, String value) {
+        String style = element.attr("style");
+        return style.contains(property + ":" + value);
+    }
+
+    private static int getTableWidth(Element table) {
+        int maxCols = 0;
+        for (Element tr : table.select("tr")) {
+            int rowCols = 0;
+            for (Element cell : tr.select("td, th")) {
+                rowCols += getSpanValue(cell, "colspan");
+            }
+            maxCols = Math.max(maxCols, rowCols);
+        }
+        return maxCols;
+    }
+
+    private static int getSpanValue(Element cell, String attribute) {
+        try {
+            return Math.max(1, Integer.parseInt(cell.attr(attribute)));
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
+    private static boolean isSpacingElement(Element element) {
+        String tag = element.tagName();
+        return tag.equals("br") || tag.equals("p") || tag.equals("div") || 
+               tag.equals("hr") || tag.matches("h[1-6]");
+    }
+
+    private static int getSpacing(Element element) {
+        String tag = element.tagName();
+        switch (tag) {
+            case "br": return 1;
+            case "hr": return 2;
+            case "p": return element.text().trim().isEmpty() ? 1 : 2;
+            case "div": return 1;
+            case "h1": return 3;
+            case "h2": return 2;
+            case "h3": case "h4": case "h5": case "h6": return 1;
+            default: return 1;
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
+        String html = "<table border='1'>" +
+                     "<tr><th>Date</th><th>Amount</th></tr>" +
+                     "<tr><td>2023-05-15</td><td>1,000.50</td></tr>" +
+                     "<tr><td>2023-12-31</td><td>2,500.75</td></tr>" +
+                     "</table>";
+        convert(html, "output.xls");
+    }
+}
