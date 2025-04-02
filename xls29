@@ -1,0 +1,155 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+public class HtmlToExcelConverter {
+
+    private static final DecimalFormat DECIMAL_FORMAT = (DecimalFormat) DecimalFormat.getInstance(Locale.US);
+    private static final Pattern NUMERIC_PATTERN = Pattern.compile("^[+-]?\\d{1,3}(,\\d{3})*(\\.\\d+)?$");
+    private static final float BASE_ROW_HEIGHT = 15f; // Base height in points
+    private static final float FONT_HEIGHT_MULTIPLIER = 1.2f; // Adjust this based on your needs
+
+    public static void convert(String html, String outputPath) throws IOException {
+        Document doc = Jsoup.parse(html);
+        try (Workbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            
+            Sheet sheet = workbook.createSheet("Data");
+            sheet.setDisplayGridlines(false);
+            
+            int currentRow = 0;
+            for (Element element : doc.body().children()) {
+                if (element.tagName().equals("table")) {
+                    currentRow = processTable(element, sheet, workbook, currentRow);
+                } else if (isSpacingElement(element)) {
+                    currentRow += getSpacing(element);
+                }
+            }
+            workbook.write(out);
+        }
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+        boolean tableHasBorder = table.hasAttr("border") && !table.attr("border").equals("0");
+        int tableWidth = getTableWidth(table);
+        List<CellRangeAddress> mergedRegions = new ArrayList<>();
+
+        for (Element tr : table.select("tr")) {
+            Row excelRow = sheet.createRow(startRow);
+            float maxFontHeight = 0;
+            List<Cell> cells = new ArrayList<>();
+
+            int colNum = 0;
+            for (Element cell : tr.select("td, th")) {
+                while (excelRow.getCell(colNum) != null) colNum++;
+                
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellValue(cell, excelCell);
+                
+                CellStyle style = applyCellStyles(cell, excelCell, workbook, tableHasBorder);
+                cells.add(excelCell);
+                
+                // Track maximum font height in row
+                Font font = workbook.getFontAt(style.getFontIndex());
+                maxFontHeight = Math.max(maxFontHeight, font.getFontHeightInPoints());
+                
+                int colspan = getSpanValue(cell, "colspan");
+                int rowspan = getSpanValue(cell, "rowspan");
+                
+                if (colspan > 1 || rowspan > 1) {
+                    CellRangeAddress region = new CellRangeAddress(
+                        startRow, startRow + rowspan - 1,
+                        colNum, colNum + colspan - 1
+                    );
+                    mergedRegions.add(region);
+                    sheet.addMergedRegion(region);
+                    if (tableHasBorder) applyBorderToMergedRegion(sheet, region, workbook);
+                }
+                colNum += colspan;
+            }
+            
+            // Set row height based on largest font in row
+            if (maxFontHeight > 0) {
+                float rowHeight = Math.max(BASE_ROW_HEIGHT, maxFontHeight * FONT_HEIGHT_MULTIPLIER);
+                excelRow.setHeightInPoints(rowHeight);
+            }
+            
+            fillEmptyCells(excelRow, tableWidth);
+            startRow++;
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < tableWidth; i++) {
+            sheet.autoSizeColumn(i);
+        }
+        
+        return startRow;
+    }
+
+    private static CellStyle applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean applyBorders) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        boolean fontChanged = false;
+
+        // Set default font
+        font.setFontName("Aptos Narrow");
+        fontChanged = true;
+
+        // Apply font size if specified
+        String fontSize = extractStyle(cell, "font-size");
+        if (!fontSize.isEmpty()) {
+            try {
+                float size = Float.parseFloat(fontSize.replace("px", "").trim());
+                font.setFontHeightInPoints((short) size);
+                fontChanged = true;
+            } catch (NumberFormatException ignored) {}
+        }
+
+        // Apply other font properties...
+        if (cell.tagName().equals("th") || hasStyle(cell, "font-weight", "bold")) {
+            font.setBold(true);
+            fontChanged = true;
+        }
+        
+        // Create the style with proper borders
+        if (applyBorders) {
+            style.setBorderTop(BorderStyle.THIN);
+            style.setBorderBottom(BorderStyle.THIN);
+            style.setBorderLeft(BorderStyle.THIN);
+            style.setBorderRight(BorderStyle.THIN);
+        }
+        
+        style.setWrapText(true); // Important for auto-height
+        if (fontChanged) style.setFont(font);
+        
+        excelCell.setCellStyle(style);
+        return style;
+    }
+
+    // ... [Keep other helper methods unchanged] ...
+
+    private static void applyBorderToMergedRegion(Sheet sheet, CellRangeAddress region, Workbook workbook) {
+        // Apply borders to all edges of the merged region...
+        BorderStyle border = BorderStyle.THIN;
+        
+        // Top border
+        for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
+            Cell cell = sheet.getRow(region.getFirstRow()).getCell(c);
+            CellStyle style = workbook.createCellStyle();
+            style.cloneStyleFrom(cell.getCellStyle());
+            style.setBorderTop(border);
+            cell.setCellStyle(style);
+        }
+        
+        // ... similar for bottom, left, right borders
+    }
+}
