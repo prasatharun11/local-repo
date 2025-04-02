@@ -1,0 +1,69 @@
+You can use the following regex pattern in Java to strictly match numeric values that may include commas as thousand separators and must have exactly two decimal places:
+
+^(?:\d{1,3}(?:,\d{3})*|\d+)\.\d{2}$
+
+Explanation:
+
+(?:\d{1,3}(?:,\d{3})*|\d+)
+
+Matches numbers with optional comma separators:
+
+\d{1,3} → Matches 1 to 3 digits at the beginning.
+
+(?:,\d{3})* → Allows for groups of three digits after a comma.
+
+|\d+ → Allows numbers without commas.
+
+
+
+\.\d{2} → Ensures exactly two decimal places.
+
+^...$ → Ensures the entire string strictly matches the pattern.
+
+
+Examples:
+
+✅ Matches:
+
+123.45
+
+1,234.56
+
+12,345.67
+
+123,456,789.99
+
+
+❌ Doesn't Match:
+
+1234.5 (only one decimal place)
+
+1,23.45 (incorrect comma placement)
+
+123,456.789 (more than two decimal places)
+
+abc.12 (non-numeric characters)
+
+
+Java Implementation:
+
+import java.util.regex.*;
+
+public class RegexTest {
+    public static void main(String[] args) {
+        String regex = "^(?:\\d{1,3}(?:,\\d{3})*|\\d+)\\.\\d{2}$";
+        String[] testCases = {
+            "123.45", "1,234.56", "12,345.67", "123,456,789.99",
+            "1234.5", "1,23.45", "123,456.789", "abc.12"
+        };
+
+        Pattern pattern = Pattern.compile(regex);
+        for (String test : testCases) {
+            Matcher matcher = pattern.matcher(test);
+            System.out.println(test + " => " + matcher.matches());
+        }
+    }
+}
+
+Would you like any modifications to the pattern, such as allowing negative numbers?
+
