@@ -1,0 +1,200 @@
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hssf.util.HSSFColor;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class HtmlToExcelConverter {
+
+    private static final DecimalFormat DECIMAL_FORMAT = (DecimalFormat) DecimalFormat.getInstance(Locale.US);
+    private static final Pattern NUMERIC_PATTERN = Pattern.compile("^[+-]?\\d{1,3}(,\\d{3})*(\\.\\d+)?$");
+    private static final Pattern DATE_PATTERN = Pattern.compile("^(\\d{1,2})/(\\d{1,2})/(\\d{2,4})$");
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MM/dd/yyyy");
+    private static final float BASE_ROW_HEIGHT = 15f;
+    private static final float FONT_HEIGHT_MULTIPLIER = 1.2f;
+
+    // Cache for styles to prevent duplicates
+    private static class StyleCache {
+        private final Map<String, CellStyle> cache = new HashMap<>();
+        private final Workbook workbook;
+
+        public StyleCache(Workbook workbook) {
+            this.workbook = workbook;
+        }
+
+        public CellStyle getStyle(Element cell, boolean applyBorders) {
+            String key = buildStyleKey(cell, applyBorders);
+            return cache.computeIfAbsent(key, k -> createStyle(cell, applyBorders));
+        }
+
+        private String buildStyleKey(Element cell, boolean applyBorders) {
+            return String.join("|",
+                cell.attr("style"),
+                cell.attr("bgcolor"),
+                cell.tagName(),
+                String.valueOf(applyBorders),
+                cell.attr("align")
+            );
+        }
+
+        private CellStyle createStyle(Element cell, boolean applyBorders) {
+            CellStyle style = workbook.createCellStyle();
+            Font font = workbook.createFont();
+            
+            // Apply font properties
+            font.setFontName("Aptos Narrow");
+            
+            String fontSize = extractStyle(cell, "font-size");
+            if (!fontSize.isEmpty()) {
+                try {
+                    float size = Float.parseFloat(fontSize.replace("px", "").trim());
+                    font.setFontHeightInPoints((short) size);
+                } catch (NumberFormatException ignored) {}
+            }
+
+            if (cell.tagName().equals("th") || hasStyle(cell, "font-weight", "bold")) {
+                font.setBold(true);
+            }
+            
+            // ... other font properties ...
+
+            style.setFont(font);
+            style.setWrapText(true);
+            
+            if (applyBorders) {
+                style.setBorderTop(BorderStyle.THIN);
+                style.setBorderBottom(BorderStyle.THIN);
+                style.setBorderLeft(BorderStyle.THIN);
+                style.setBorderRight(BorderStyle.THIN);
+            }
+            
+            return style;
+        }
+    }
+
+    public static void convert(String html, String outputPath) throws IOException {
+        Document doc = Jsoup.parse(html);
+        try (HSSFWorkbook workbook = new HSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(outputPath)) {
+            
+            Sheet sheet = workbook.createSheet("Data");
+            sheet.setDisplayGridlines(false);
+            
+            StyleCache styleCache = new StyleCache(workbook);
+            int currentRow = 0;
+            
+            for (Node node : doc.body().childNodes()) {
+                if (node instanceof Element) {
+                    Element element = (Element) node;
+                    if (element.tagName().equals("table")) {
+                        currentRow = processTable(element, sheet, workbook, currentRow, styleCache);
+                    } else if (isSpacingElement(element)) {
+                        currentRow += getSpacing(element);
+                    }
+                }
+            }
+            workbook.write(out);
+        }
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, 
+                                  int startRow, StyleCache styleCache) {
+        boolean tableHasBorder = table.hasAttr("border") && !table.attr("border").equals("0");
+        int tableWidth = getTableWidth(table);
+        List<CellRangeAddress> mergedRegions = new ArrayList<>();
+
+        for (Element tr : table.select("tr")) {
+            Row excelRow = sheet.createRow(startRow);
+            float maxFontHeight = 0;
+            int maxLineCount = 1;
+            
+            int colNum = 0;
+            for (Element cell : tr.select("td, th")) {
+                while (excelRow.getCell(colNum) != null) colNum++;
+                
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellValue(cell, excelCell);
+                
+                // Get style from cache
+                CellStyle style = styleCache.getStyle(cell, tableHasBorder);
+                excelCell.setCellStyle(style);
+                
+                // Calculate line breaks and font height
+                int lineCount = countLineBreaks(cell);
+                maxLineCount = Math.max(maxLineCount, lineCount);
+                Font font = workbook.getFontAt(style.getFontIndex());
+                maxFontHeight = Math.max(maxFontHeight, font.getFontHeightInPoints());
+                
+                // Handle merged cells
+                int colspan = getSpanValue(cell, "colspan");
+                int rowspan = getSpanValue(cell, "rowspan");
+                
+                if (colspan > 1 || rowspan > 1) {
+                    CellRangeAddress region = new CellRangeAddress(
+                        startRow, startRow + rowspan - 1,
+                        colNum, colNum + colspan - 1
+                    );
+                    mergedRegions.add(region);
+                    sheet.addMergedRegion(region);
+                    
+                    if (tableHasBorder) {
+                        applyBorderToMergedRegion(sheet, region, workbook, styleCache);
+                    }
+                }
+                colNum += colspan;
+            }
+            
+            // Set row height considering line breaks and font size
+            excelRow.setHeightInPoints(
+                Math.max(BASE_ROW_HEIGHT, maxFontHeight * FONT_HEIGHT_MULTIPLIER * maxLineCount)
+            );
+            
+            startRow++;
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < tableWidth; i++) {
+            sheet.autoSizeColumn(i);
+        }
+        
+        return startRow;
+    }
+
+    // ... [Other helper methods remain unchanged] ...
+
+    private static void applyBorderToMergedRegion(Sheet sheet, CellRangeAddress region, 
+                                                Workbook workbook, StyleCache styleCache) {
+        // Reuse the existing style but add borders
+        for (int r = region.getFirstRow(); r <= region.getLastRow(); r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            
+            for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) continue;
+                
+                // Create a new style with borders based on existing style
+                CellStyle newStyle = workbook.createCellStyle();
+                newStyle.cloneStyleFrom(cell.getCellStyle());
+                
+                // Apply borders only to outer edges
+                if (r == region.getFirstRow()) newStyle.setBorderTop(BorderStyle.THIN);
+                if (r == region.getLastRow()) newStyle.setBorderBottom(BorderStyle.THIN);
+                if (c == region.getFirstColumn()) newStyle.setBorderLeft(BorderStyle.THIN);
+                if (c == region.getLastColumn()) newStyle.setBorderRight(BorderStyle.THIN);
+                
+                cell.setCellStyle(newStyle);
+            }
+        }
+    }
+}
