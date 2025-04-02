@@ -1,0 +1,66 @@
+import org.apache.poi.ss.usermodel.*; import org.jsoup.nodes.Element; import java.util.HashMap; import java.util.Map;
+
+public class ExcelStyleUtil { private static final Map<String, Font> fontCache = new HashMap<>();
+
+private static Font getOrCreateFont(Workbook workbook, String fontName, short fontSize, boolean isBold, boolean isItalic, short color) {
+    String key = fontName + "-" + fontSize + "-" + isBold + "-" + isItalic + "-" + color;
+    if (fontCache.containsKey(key)) {
+        return fontCache.get(key);
+    }
+    Font font = workbook.createFont();
+    font.setFontName(fontName);
+    font.setFontHeightInPoints(fontSize);
+    font.setBold(isBold);
+    font.setItalic(isItalic);
+    font.setColor(color);
+    fontCache.put(key, font);
+    return font;
+}
+
+public static CellStyle applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean applyBorders) {
+    CellStyle style = workbook.createCellStyle();
+
+    // Default font settings
+    String fontName = "Aptos Narrow";
+    short fontSize = 11; // Default size
+    boolean isBold = cell.tagName().equals("th") || hasStyle(cell, "font-weight", "bold");
+    boolean isItalic = hasStyle(cell, "font-style", "italic");
+    short fontColor = IndexedColors.BLACK.getIndex();
+
+    // Extract font size if specified
+    String fontSizeStr = extractStyle(cell, "font-size");
+    if (!fontSizeStr.isEmpty()) {
+        try {
+            fontSize = (short) Float.parseFloat(fontSizeStr.replace("px", "").trim());
+        } catch (NumberFormatException ignored) {}
+    }
+
+    // Retrieve or create a cached font
+    Font font = getOrCreateFont(workbook, fontName, fontSize, isBold, isItalic, fontColor);
+    style.setFont(font);
+
+    // Apply border styles if required
+    if (applyBorders) {
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+    }
+
+    style.setWrapText(true);
+    excelCell.setCellStyle(style);
+    return style;
+}
+
+private static String extractStyle(Element cell, String styleProperty) {
+    // Assume this method extracts and returns the specified style property from the element
+    return "";
+}
+
+private static boolean hasStyle(Element cell, String styleProperty, String value) {
+    // Assume this method checks if the element has the specified style property with the given value
+    return false;
+}
+
+}
+
