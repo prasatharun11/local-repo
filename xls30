@@ -1,0 +1,121 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+public class HtmlToExcelConverter {
+
+    // ... [Keep previous constants and other methods unchanged] ...
+
+    private static void setCellValue(Element cell, Cell excelCell) {
+        StringBuilder cellContent = new StringBuilder();
+        
+        // Process all child nodes including text and <br> elements
+        for (Node node : cell.childNodes()) {
+            if (node instanceof TextNode) {
+                cellContent.append(((TextNode) node).text());
+            } else if (node instanceof Element && ((Element) node).tagName().equals("br")) {
+                cellContent.append("\n"); // Add line break for <br> tags
+            }
+        }
+        
+        String text = cellContent.toString().trim();
+        
+        if (isNumeric(text)) {
+            try {
+                Number number = DECIMAL_FORMAT.parse(text);
+                excelCell.setCellValue(number.doubleValue());
+                return;
+            } catch (ParseException ignored) {}
+        } 
+        excelCell.setCellValue(text);
+    }
+
+    private static CellStyle applyCellStyles(Element cell, Cell excelCell, Workbook workbook, boolean applyBorders) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        boolean fontChanged = false;
+
+        // Set default font
+        font.setFontName("Aptos Narrow");
+        fontChanged = true;
+
+        // Apply font size if specified
+        String fontSize = extractStyle(cell, "font-size");
+        if (!fontSize.isEmpty()) {
+            try {
+                float size = Float.parseFloat(fontSize.replace("px", "").trim());
+                font.setFontHeightInPoints((short) size);
+                fontChanged = true;
+            } catch (NumberFormatException ignored) {}
+        }
+
+        // ... [Rest of font styling unchanged] ...
+
+        // Critical for line breaks to work:
+        style.setWrapText(true); // Enable text wrapping
+        style.setVerticalAlignment(VerticalAlignment.TOP); // Align text to top
+
+        if (fontChanged) style.setFont(font);
+        excelCell.setCellStyle(style);
+        return style;
+    }
+
+    private static int processTable(Element table, Sheet sheet, Workbook workbook, int startRow) {
+        // ... [Previous table processing code unchanged until row creation] ...
+        
+        for (Element tr : table.select("tr")) {
+            Row excelRow = sheet.createRow(startRow);
+            float maxFontHeight = 0;
+            int lineCount = 1; // Track max line count in row
+            
+            int colNum = 0;
+            for (Element cell : tr.select("td, th")) {
+                while (excelRow.getCell(colNum) != null) colNum++;
+                
+                Cell excelCell = excelRow.createCell(colNum);
+                setCellValue(cell, excelCell);
+                
+                // Count line breaks to adjust row height
+                int cellLineCount = countLineBreaks(cell);
+                lineCount = Math.max(lineCount, cellLineCount);
+                
+                CellStyle style = applyCellStyles(cell, excelCell, workbook, tableHasBorder);
+                Font font = workbook.getFontAt(style.getFontIndex());
+                maxFontHeight = Math.max(maxFontHeight, font.getFontHeightInPoints());
+                
+                // ... [Rest of cell processing unchanged] ...
+            }
+            
+            // Calculate row height considering line breaks
+            float rowHeight = Math.max(BASE_ROW_HEIGHT, 
+                                     maxFontHeight * FONT_HEIGHT_MULTIPLIER * lineCount);
+            excelRow.setHeightInPoints(rowHeight);
+            
+            startRow++;
+        }
+        // ... [Rest of table processing unchanged] ...
+    }
+
+    private static int countLineBreaks(Element cell) {
+        int count = 1; // At least one line
+        for (Node node : cell.childNodes()) {
+            if (node instanceof Element && ((Element) node).tagName().equals("br")) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    // ... [Keep all other helper methods unchanged] ...
+}
