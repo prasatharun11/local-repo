@@ -1,0 +1,183 @@
+$.ajaxSetup({
+    beforeSend: function (jqXHR, settings) {
+        if (typeof settings.data === "object") {
+            let jsonString = JSON.stringify(settings.data); // Convert to JSON string
+            let compressedData = pako.gzip(jsonString); // Gzip compress (Uint8Array)
+
+            // Convert Uint8Array to Base64
+            let base64Data = btoa(String.fromCharCode(...compressedData));
+
+            // Wrap inside a JSON object
+            settings.data = JSON.stringify({ gzipped: base64Data });
+
+            // Ensure proper JSON format
+            settings.contentType = "application/json";
+        }
+    }
+});
+
+// Example AJAX Call
+$.ajax({
+    url: "https://example.com/api",
+    type: "POST",
+    data: { name: "John", age: 30 },
+    success: function (response) {
+        console.log("Server Response:", response);
+    }
+});
+
+
+
+
+
+import java.io.*;
+import java.util.*;
+import java.util.zip.GZIPInputStream;
+import java.util.Base64;
+import org.json.JSONObject;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+
+public class GzipRequestWrapper extends HttpServletRequestWrapper {
+    private final byte[] decompressedData;
+    private JSONObject jsonBody;
+    private Map<String, String[]> combinedParameters;
+
+    public GzipRequestWrapper(HttpServletRequest request) throws IOException {
+        super(request);
+
+        // Read and decode request body
+        byte[] requestBody = readRequestBody(request);
+
+        // Check if the body is Base64 encoded and decode it
+        if (isBase64Encoded(requestBody)) {
+            requestBody = Base64.getDecoder().decode(requestBody);
+        }
+
+        // Check if the request is Gzip compressed and decompress it
+        if (isGzipCompressed(requestBody)) {
+            this.decompressedData = decompress(requestBody);
+        } else {
+            this.decompressedData = requestBody;
+        }
+
+        // Parse JSON body if content type is JSON
+        if ("application/json".equalsIgnoreCase(request.getContentType())) {
+            parseJsonBody(new String(decompressedData, StandardCharsets.UTF_8));
+        }
+
+        // Merge JSON body parameters with query parameters
+        mergeParameters(request);
+    }
+
+    private byte[] readRequestBody(HttpServletRequest request) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (InputStream inputStream = request.getInputStream()) {
+            byte[] temp = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(temp)) != -1) {
+                buffer.write(temp, 0, bytesRead);
+            }
+        }
+        return buffer.toByteArray();
+    }
+
+    private boolean isBase64Encoded(byte[] data) {
+        // Simple heuristic: check if data consists of printable Base64 characters
+        String str = new String(data, StandardCharsets.UTF_8).trim();
+        return str.matches("^[A-Za-z0-9+/=]+$");
+    }
+
+    private boolean isGzipCompressed(byte[] data) {
+        return data.length > 2 && data[0] == (byte) 0x1F && data[1] == (byte) 0x8B;
+    }
+
+    private byte[] decompress(byte[] compressedData) throws IOException {
+        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(compressedData);
+             GZIPInputStream gzipInputStream = new GZIPInputStream(byteArrayInputStream);
+             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+            
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = gzipInputStream.read(buffer)) != -1) {
+                byteArrayOutputStream.write(buffer, 0, bytesRead);
+            }
+            return byteArrayOutputStream.toByteArray();
+        }
+    }
+
+    private void parseJsonBody(String jsonString) {
+        try {
+            this.jsonBody = new JSONObject(jsonString);
+        } catch (Exception e) {
+            this.jsonBody = new JSONObject(); // Use an empty JSON object if parsing fails
+        }
+    }
+
+    private void mergeParameters(HttpServletRequest request) {
+        combinedParameters = new HashMap<>();
+
+        // Add query parameters first
+        request.getParameterMap().forEach(combinedParameters::put);
+
+        // Add JSON parameters
+        if (jsonBody != null) {
+            for (String key : jsonBody.keySet()) {
+                combinedParameters.put(key, new String[]{jsonBody.get(key).toString()});
+            }
+        }
+    }
+
+    @Override
+    public ServletInputStream getInputStream() {
+        return new ServletInputStream() {
+            private final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(decompressedData);
+
+            @Override
+            public int read() {
+                return byteArrayInputStream.read();
+            }
+
+            @Override
+            public boolean isFinished() {
+                return byteArrayInputStream.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener readListener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    @Override
+    public BufferedReader getReader() {
+        return new BufferedReader(new InputStreamReader(getInputStream(), StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public String getParameter(String name) {
+        String[] values = combinedParameters.get(name);
+        return (values != null && values.length > 0) ? values[0] : null;
+    }
+
+    @Override
+    public Enumeration<String> getParameterNames() {
+        return Collections.enumeration(combinedParameters.keySet());
+    }
+
+    @Override
+    public String[] getParameterValues(String name) {
+        return combinedParameters.get(name);
+    }
+
+    @Override
+    public Map<String, String[]> getParameterMap() {
+        return combinedParameters;
+    }
+}
