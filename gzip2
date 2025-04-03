@@ -1,0 +1,69 @@
+import java.io.*;
+import java.util.Base64;
+import java.util.zip.GZIPInputStream;
+import jakarta.servlet.http.HttpServletRequest;
+
+public class GzipRequestWrapper extends HttpServletRequestWrapper {
+    private final byte[] decompressedData;
+
+    public GzipRequestWrapper(HttpServletRequest request) throws IOException {
+        super(request);
+        
+        // Read the request body as a string
+        String compressedString = new BufferedReader(new InputStreamReader(request.getInputStream()))
+                .lines()
+                .reduce("", (acc, line) -> acc + line);
+        
+        // Decode the binary string into bytes
+        byte[] compressedBytes = compressedString.getBytes("ISO-8859-1"); // Correct encoding
+
+        // Decompress the byte array
+        this.decompressedData = decompress(compressedBytes);
+    }
+
+    private byte[] decompress(byte[] compressedData) throws IOException {
+        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(compressedData);
+             GZIPInputStream gzipInputStream = new GZIPInputStream(byteArrayInputStream);
+             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+            
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = gzipInputStream.read(buffer)) != -1) {
+                byteArrayOutputStream.write(buffer, 0, bytesRead);
+            }
+            return byteArrayOutputStream.toByteArray();
+        }
+    }
+
+    @Override
+    public ServletInputStream getInputStream() {
+        return new ServletInputStream() {
+            private final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(decompressedData);
+
+            @Override
+            public int read() {
+                return byteArrayInputStream.read();
+            }
+
+            @Override
+            public boolean isFinished() {
+                return byteArrayInputStream.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener readListener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    @Override
+    public BufferedReader getReader() {
+        return new BufferedReader(new InputStreamReader(getInputStream()));
+    }
+}
