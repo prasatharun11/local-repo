@@ -1,0 +1,19 @@
+import java.io.IOException;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+
+public class GzipRequestFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        if (request instanceof HttpServletRequest) {
+            HttpServletRequest httpRequest = (HttpServletRequest) request;
+            if ("gzip".equalsIgnoreCase(httpRequest.getHeader("Content-Encoding"))) {
+                GzipRequestWrapper wrappedRequest = new GzipRequestWrapper(httpRequest);
+                chain.doFilter(wrappedRequest, response);
+                return;
+            }
+        }
+        chain.doFilter(request, response);
+    }
+}
