@@ -1,0 +1,137 @@
+$.ajaxSetup({
+    beforeSend: function (jqXHR, settings) {
+        if (settings.data && typeof settings.data === "string") {
+            let compressedData = pako.gzip(settings.data, { to: 'string' }); // Compress data
+            let base64Data = btoa(compressedData); // Convert to Base64
+            settings.data = base64Data;
+        }
+        jqXHR.setRequestHeader("Content-Encoding", "gzip"); // Inform server that data is compressed
+        settings.processData = false;
+        settings.contentType = "application/x-www-form-urlencoded"; // Ensure server interprets it correctly
+    }
+});
+
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
+
+public class CompressionFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+
+        // Check if Content-Encoding is gzip
+        String contentEncoding = httpRequest.getHeader("Content-Encoding");
+        if ("gzip".equalsIgnoreCase(contentEncoding)) {
+            CustomRequestWrapper wrappedRequest = new CustomRequestWrapper(httpRequest);
+            chain.doFilter(wrappedRequest, response);
+        } else {
+            chain.doFilter(request, response);
+        }
+    }
+
+    @Override
+    public void init(FilterConfig filterConfig) {}
+
+    @Override
+    public void destroy() {}
+}
+
+
+import javax.servlet.ReadListener;
+import javax.servlet.ServletInputStream;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
+import java.io.*;
+import java.util.*;
+import java.util.zip.GZIPInputStream;
+import java.util.Base64;
+
+public class CustomRequestWrapper extends HttpServletRequestWrapper {
+    private final byte[] decompressedBody;
+    private final Map<String, String[]> parameterMap = new HashMap<>();
+
+    public CustomRequestWrapper(HttpServletRequest request) throws IOException {
+        super(request);
+        byte[] requestBody = request.getInputStream().readAllBytes();
+
+        // Decompress Gzip and decode Base64
+        decompressedBody = decompressData(requestBody);
+
+        if (request.getContentType() != null && request.getContentType().contains("application/x-www-form-urlencoded")) {
+            parseParameters(new String(decompressedBody, request.getCharacterEncoding()));
+        }
+    }
+
+    private byte[] decompressData(byte[] inputData) throws IOException {
+        byte[] decodedBytes = Base64.getDecoder().decode(inputData);
+        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(decodedBytes);
+             GZIPInputStream gzipInputStream = new GZIPInputStream(byteArrayInputStream);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+            byte[] buffer = new byte[1024];
+            int len;
+            while ((len = gzipInputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, len);
+            }
+            return outputStream.toByteArray();
+        }
+    }
+
+    private void parseParameters(String body) {
+        String[] pairs = body.split("&");
+        for (String pair : pairs) {
+            String[] keyValue = pair.split("=");
+            if (keyValue.length == 2) {
+                parameterMap.put(keyValue[0], new String[]{keyValue[1]});
+            }
+        }
+    }
+
+    @Override
+    public ServletInputStream getInputStream() {
+        return new ServletInputStream() {
+            private final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(decompressedBody);
+
+            @Override
+            public boolean isFinished() {
+                return byteArrayInputStream.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener readListener) {}
+
+            @Override
+            public int read() {
+                return byteArrayInputStream.read();
+            }
+        };
+    }
+
+    @Override
+    public String getParameter(String name) {
+        String[] values = parameterMap.get(name);
+        return (values != null && values.length > 0) ? values[0] : null;
+    }
+
+    @Override
+    public Map<String, String[]> getParameterMap() {
+        return parameterMap;
+    }
+
+    @Override
+    public Enumeration<String> getParameterNames() {
+        return Collections.enumeration(parameterMap.keySet());
+    }
+
+    @Override
+    public String[] getParameterValues(String name) {
+        return parameterMap.get(name);
+    }
+}
