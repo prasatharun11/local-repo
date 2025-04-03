@@ -1,0 +1,57 @@
+import java.io.*;
+import java.util.zip.GZIPInputStream;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+
+public class GzipRequestWrapper extends HttpServletRequestWrapper {
+    private final byte[] decompressedData;
+
+    public GzipRequestWrapper(HttpServletRequest request) throws IOException {
+        super(request);
+        this.decompressedData = decompress(request.getInputStream());
+    }
+
+    private byte[] decompress(InputStream gzipStream) throws IOException {
+        try (GZIPInputStream gzipInputStream = new GZIPInputStream(gzipStream);
+             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = gzipInputStream.read(buffer)) != -1) {
+                byteArrayOutputStream.write(buffer, 0, bytesRead);
+            }
+            return byteArrayOutputStream.toByteArray();
+        }
+    }
+
+    @Override
+    public ServletInputStream getInputStream() {
+        return new ServletInputStream() {
+            private final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(decompressedData);
+
+            @Override
+            public int read() {
+                return byteArrayInputStream.read();
+            }
+
+            @Override
+            public boolean isFinished() {
+                return byteArrayInputStream.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener readListener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    @Override
+    public BufferedReader getReader() {
+        return new BufferedReader(new InputStreamReader(getInputStream()));
+    }
+}
