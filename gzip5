@@ -1,0 +1,124 @@
+import java.io.*;
+import java.util.*;
+import java.util.zip.GZIPInputStream;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+
+public class GzipRequestWrapper extends HttpServletRequestWrapper {
+    private final byte[] decompressedData;
+    private Map<String, String[]> parameters = new HashMap<>();
+
+    public GzipRequestWrapper(HttpServletRequest request) throws IOException {
+        super(request);
+        
+        byte[] requestBody = readRequestBody(request);
+
+        if (isGzipCompressed(requestBody)) {
+            this.decompressedData = decompress(requestBody);
+        } else {
+            this.decompressedData = requestBody;
+        }
+
+        // Parse parameters if Content-Type is form data
+        if ("application/x-www-form-urlencoded".equalsIgnoreCase(request.getContentType())) {
+            parseFormParameters(new String(decompressedData, "UTF-8"));
+        }
+    }
+
+    private byte[] readRequestBody(HttpServletRequest request) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        InputStream inputStream = request.getInputStream();
+        byte[] temp = new byte[1024];
+        int bytesRead;
+
+        while ((bytesRead = inputStream.read(temp)) != -1) {
+            buffer.write(temp, 0, bytesRead);
+        }
+
+        return buffer.toByteArray();
+    }
+
+    private boolean isGzipCompressed(byte[] data) {
+        return data.length > 2 && data[0] == (byte) 0x1F && data[1] == (byte) 0x8B;
+    }
+
+    private byte[] decompress(byte[] compressedData) throws IOException {
+        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(compressedData);
+             GZIPInputStream gzipInputStream = new GZIPInputStream(byteArrayInputStream);
+             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+            
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = gzipInputStream.read(buffer)) != -1) {
+                byteArrayOutputStream.write(buffer, 0, bytesRead);
+            }
+            return byteArrayOutputStream.toByteArray();
+        }
+    }
+
+    private void parseFormParameters(String body) {
+        parameters = new HashMap<>();
+        String[] pairs = body.split("&");
+        for (String pair : pairs) {
+            String[] keyValue = pair.split("=");
+            if (keyValue.length == 2) {
+                String key = keyValue[0];
+                String value = keyValue[1];
+                parameters.put(key, new String[]{value});
+            }
+        }
+    }
+
+    @Override
+    public ServletInputStream getInputStream() {
+        return new ServletInputStream() {
+            private final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(decompressedData);
+
+            @Override
+            public int read() {
+                return byteArrayInputStream.read();
+            }
+
+            @Override
+            public boolean isFinished() {
+                return byteArrayInputStream.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener readListener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    @Override
+    public BufferedReader getReader() {
+        return new BufferedReader(new InputStreamReader(getInputStream()));
+    }
+
+    @Override
+    public String getParameter(String name) {
+        String[] values = parameters.get(name);
+        return (values != null && values.length > 0) ? values[0] : null;
+    }
+
+    @Override
+    public Map<String, String[]> getParameterMap() {
+        return parameters;
+    }
+
+    @Override
+    public Enumeration<String> getParameterNames() {
+        return Collections.enumeration(parameters.keySet());
+    }
+
+    @Override
+    public String[] getParameterValues(String name) {
+        return parameters.get(name);
+    }
+}
