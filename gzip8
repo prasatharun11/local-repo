@@ -1,0 +1,31 @@
+$.ajaxSetup({
+    beforeSend: function (jqXHR, settings) {
+        if (typeof settings.data === "object") {
+            // Convert object to JSON string
+            let jsonString = JSON.stringify(settings.data);
+
+            // Gzip compress using pako
+            let compressedData = pako.gzip(jsonString, { to: 'string' });
+
+            // Convert compressed data to Base64 (Optional for safer transmission)
+            let base64Data = btoa(compressedData);
+
+            // Modify request settings
+            settings.data = base64Data;
+
+            // Set content type header
+            jqXHR.setRequestHeader("Content-Encoding", "gzip");
+            jqXHR.setRequestHeader("Content-Type", "application/json");
+        }
+    }
+});
+
+// Example AJAX Call
+$.ajax({
+    url: "https://example.com/api",
+    type: "POST",
+    data: { name: "John", age: 30 },
+    success: function (response) {
+        console.log(response);
+    }
+});
