@@ -1,0 +1,211 @@
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
+import java.io.*;
+import java.util.*;
+import java.util.Base64;
+import java.util.zip.GZIPInputStream;
+
+public class GzipDecodingFilter implements Filter {
+
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {}
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        
+        String contentEncoding = httpRequest.getHeader("Content-Encoding");
+        String transferEncoding = httpRequest.getHeader("Content-Transfer-Encoding");
+        
+        if ("gzip".equals(contentEncoding) && "base64".equals(transferEncoding)) {
+            chain.doFilter(new GzipRequestWrapper(httpRequest), response);
+        } else {
+            chain.doFilter(request, response);
+        }
+    }
+
+    @Override
+    public void destroy() {}
+
+    private static class GzipRequestWrapper extends HttpServletRequestWrapper {
+        private byte[] decompressedBody;
+        private Map<String, String[]> parameterMap;
+        private boolean parametersParsed = false;
+
+        public GzipRequestWrapper(HttpServletRequest request) throws IOException {
+            super(request);
+            
+            // Store original parameters from URL
+            this.parameterMap = new HashMap<>(request.getParameterMap());
+            
+            // Process body only for POST/PUT/PATCH
+            if ("POST".equalsIgnoreCase(request.getMethod()) || 
+                "PUT".equalsIgnoreCase(request.getMethod()) ||
+                "PATCH".equalsIgnoreCase(request.getMethod())) {
+                processRequestBody(request);
+            }
+        }
+
+        private void processRequestBody(HttpServletRequest request) throws IOException {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try (InputStream is = request.getInputStream()) {
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = is.read(buffer)) > 0) {
+                    bos.write(buffer, 0, len);
+                }
+            }
+            
+            byte[] base64Decoded = Base64.getDecoder().decode(bos.toByteArray());
+            
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(base64Decoded);
+                 GZIPInputStream gis = new GZIPInputStream(bis);
+                 ByteArrayOutputStream decompressed = new ByteArrayOutputStream()) {
+                
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = gis.read(buffer)) > 0) {
+                    decompressed.write(buffer, 0, len);
+                }
+                
+                this.decompressedBody = decompressed.toByteArray();
+            }
+        }
+
+        @Override
+        public ServletInputStream getInputStream() throws IOException {
+            if (decompressedBody != null) {
+                return new ByteArrayServletInputStream(decompressedBody);
+            }
+            return super.getInputStream();
+        }
+
+        @Override
+        public BufferedReader getReader() throws IOException {
+            if (decompressedBody != null) {
+                return new BufferedReader(new InputStreamReader(
+                    new ByteArrayInputStream(decompressedBody), getCharacterEncoding()));
+            }
+            return super.getReader();
+        }
+
+        @Override
+        public String getParameter(String name) {
+            String[] values = getParameterValues(name);
+            return values != null && values.length > 0 ? values[0] : null;
+        }
+
+        @Override
+        public Map<String, String[]> getParameterMap() {
+            parseParametersIfNeeded();
+            return Collections.unmodifiableMap(parameterMap);
+        }
+
+        @Override
+        public Enumeration<String> getParameterNames() {
+            parseParametersIfNeeded();
+            return Collections.enumeration(parameterMap.keySet());
+        }
+
+        @Override
+        public String[] getParameterValues(String name) {
+            parseParametersIfNeeded();
+            return parameterMap.get(name);
+        }
+
+        private synchronized void parseParametersIfNeeded() {
+            if (parametersParsed || decompressedBody == null) {
+                return;
+            }
+            
+            try {
+                String body = new String(decompressedBody, getCharacterEncoding());
+                
+                // Parse body parameters (assuming application/x-www-form-urlencoded)
+                if (body != null && !body.isEmpty()) {
+                    String[] pairs = body.split("&");
+                    for (String pair : pairs) {
+                        String[] keyValue = pair.split("=");
+                        if (keyValue.length == 2) {
+                            String key = urlDecode(keyValue[0]);
+                            String value = urlDecode(keyValue[1]);
+                            
+                            // Add to existing parameters or create new entry
+                            if (parameterMap.containsKey(key)) {
+                                String[] existingValues = parameterMap.get(key);
+                                String[] newValues = Arrays.copyOf(existingValues, existingValues.length + 1);
+                                newValues[existingValues.length] = value;
+                                parameterMap.put(key, newValues);
+                            } else {
+                                parameterMap.put(key, new String[]{value});
+                            }
+                        }
+                    }
+                }
+                
+                parametersParsed = true;
+            } catch (UnsupportedEncodingException e) {
+                throw new RuntimeException("Failed to parse parameters", e);
+            }
+        }
+
+        private String urlDecode(String value) throws UnsupportedEncodingException {
+            return java.net.URLDecoder.decode(value, getCharacterEncoding());
+        }
+
+        private static class ByteArrayServletInputStream extends ServletInputStream {
+            private final ByteArrayInputStream bis;
+
+            public ByteArrayServletInputStream(byte[] bytes) {
+                this.bis = new ByteArrayInputStream(bytes);
+            }
+
+            @Override
+            public boolean isFinished() {
+                return bis.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener readListener) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int read() throws IOException {
+                return bis.read();
+            }
+        }
+    }
+}
+
+// Example with both URL parameters and body parameters
+$.ajax({
+  url: '/api/endpoint?query=searchTerm&page=1', // URL parameters
+  method: 'POST',
+  data: {name: 'John', age: 30}, // Body parameters
+  processData: false,
+  beforeSend: function(jqXHR, settings) {
+    if (settings.data) {
+      // Convert data to URL-encoded string if it's an object
+      if (typeof settings.data === 'object') {
+        settings.data = $.param(settings.data);
+      }
+      
+      // GZIP compress then Base64 encode
+      const compressed = pako.gzip(settings.data);
+      settings.data = btoa(String.fromCharCode.apply(null, compressed));
+      
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    }
+  }
+});
