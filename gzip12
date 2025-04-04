@@ -1,0 +1,20 @@
+function uint8ToBase64(uint8Array) {
+    let binary = '';
+    uint8Array.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+}
+
+$.ajaxSetup({
+    beforeSend: function (jqXHR, settings) {
+        if (settings.data && typeof settings.data === "string") {
+            const compressed = pako.gzip(settings.data); // real gzip Uint8Array
+            const base64 = uint8ToBase64(compressed);    // safe base64 encoding
+            settings.data = base64;
+        }
+        jqXHR.setRequestHeader("Content-Encoding", "gzip");
+        settings.processData = false;
+        settings.contentType = "application/x-www-form-urlencoded";
+    }
+});
