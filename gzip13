@@ -1,0 +1,28 @@
+function uint8ArrayToBase64(uint8Array) {
+    // Convert byte array to a binary string
+    let binaryString = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+        binaryString += String.fromCharCode(uint8Array[i]);
+    }
+    // Now use btoa safely
+    return btoa(binaryString);
+}
+
+$.ajaxSetup({
+    beforeSend: function (jqXHR, settings) {
+        if (settings.data && typeof settings.data === "string") {
+            const compressed = pako.gzip(settings.data); // Uint8Array
+            const base64 = uint8ArrayToBase64(compressed); // Proper Base64 encoding
+            settings.data = base64;
+        }
+        jqXHR.setRequestHeader("Content-Encoding", "gzip");
+        settings.processData = false;
+        settings.contentType = "application/x-www-form-urlencoded";
+    }
+});
+
+
+
+byte[] base64Input = request.getInputStream().readAllBytes();
+byte[] decoded = Base64.getDecoder().decode(base64Input); // this now works
+GZIPInputStream gzip = new GZIPInputStream(new ByteArrayInputStream(decoded));
