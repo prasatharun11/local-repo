@@ -1,0 +1,44 @@
+import org.json.JSONObject;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
+public class JSONConverter {
+    public static JSONObject convertToJSONObject(String input) {
+        try {
+            // Check if input is already a JSON
+            if (input.trim().startsWith("{") && input.trim().endsWith("}")) {
+                return new JSONObject(input);  // Parse directly
+            }
+
+            // Otherwise, treat as URL-encoded query string
+            JSONObject jsonObject = new JSONObject();
+            String[] pairs = input.split("&");
+
+            for (String pair : pairs) {
+                String[] keyValue = pair.split("=", 2);
+                if (keyValue.length == 2) {
+                    String key = URLDecoder.decode(keyValue[0], StandardCharsets.UTF_8);
+                    String value = URLDecoder.decode(keyValue[1], StandardCharsets.UTF_8);
+                    jsonObject.put(key, value);
+                }
+            }
+            return jsonObject;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static void main(String[] args) {
+        String urlEncodedString = "appToken=ad088493-7fbd-400d-afdd-6b68aae0849b&ctrlblkid=9020&ctrlblksearchtyp=E&ctrlblkval=ABC&origin=DOM&sortField=AccountNumber&sortDirection=A&rows=10&page=1";
+        String jsonString = "{\"appToken\":\"ad088493.7fbd-400d-afdd-6b68aae0849b\",\"ctrlblkid\":\"9010\",\"ctrlblksearchtyp\":\"E\",\"ctrlblkval\":\"ABC\",\"origin\":\"DOM\",\"sortField\":\"insuredName\",\"sortDirection\":\"A\",\"polflag\":\"E\",\"rows\":10,\"page\":1,\"currCode\":\"USD\"}";
+
+        System.out.println("Converted JSON from URL-encoded string:");
+        System.out.println(convertToJSONObject(urlEncodedString).toString(4));
+
+        System.out.println("\nConverted JSON from JSON string:");
+        System.out.println(convertToJSONObject(jsonString).toString(4));
+    }
+}
