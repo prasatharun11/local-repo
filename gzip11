@@ -1,0 +1,12 @@
+$.ajaxSetup({
+    beforeSend: function (jqXHR, settings) {
+        if (settings.data && typeof settings.data === "string") {
+            let compressedData = pako.gzip(settings.data); // This gives a Uint8Array
+            let base64Data = btoa(String.fromCharCode.apply(null, compressedData)); // Convert to base64
+            settings.data = base64Data;
+        }
+        jqXHR.setRequestHeader("Content-Encoding", "gzip");
+        settings.processData = false;
+        settings.contentType = "application/x-www-form-urlencoded";
+    }
+});
