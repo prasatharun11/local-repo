@@ -1,0 +1,53 @@
+import org.json.JSONObject;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+
+public class JSONConverter {
+    public static JSONObject convertToJSONObject(String input) {
+        try {
+            // Check if input is a JSON string
+            input = input.trim();
+            if (input.startsWith("{") && input.endsWith("}")) {
+                return new JSONObject(input);  // Parse directly
+            }
+
+            // Otherwise, treat as URL-encoded query string
+            JSONObject jsonObject = new JSONObject();
+            String[] pairs = input.split("&");
+
+            for (String pair : pairs) {
+                String[] keyValue = pair.split("=", 2);
+                if (keyValue.length == 2) {
+                    String key = URLDecoder.decode(keyValue[0].trim(), StandardCharsets.UTF_8);
+                    String value = URLDecoder.decode(keyValue[1].trim(), StandardCharsets.UTF_8);
+
+                    // Try parsing numerical values properly
+                    if (value.matches("-?\\d+(\\.\\d+)?")) {
+                        if (value.contains(".")) {
+                            jsonObject.put(key, Double.parseDouble(value)); // Floating-point numbers
+                        } else {
+                            jsonObject.put(key, Integer.parseInt(value)); // Integers
+                        }
+                    } else {
+                        jsonObject.put(key, value);
+                    }
+                }
+            }
+            return jsonObject;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static void main(String[] args) {
+        String urlEncodedString = "appToken=b59e7cd2-f1cc-430d-ace8-4faf3d63acba&ctrlblkid=9020&ctrlblksearchtyp=E&ctrlblkval=ABC&origin=DOM&sortField=AccountNumber&sortDirection=A&rows=10&page=1";
+        String jsonString = "{\"ctrlblksearchtyp\":\"E\",\"sortDirection\":\"A\",\"ctrlblkval\":\"ABC\",\"origin\":\"DOM\",\"sortField\":\"AccountNumber\",\"ctrlblkid\":\"9020\",\"page\":\"1\",\"rows\":\"10\",\"appToken\":\"b59e7cd2-f1cc-430d-ace8-4faf3d63acba\"}";
+
+        System.out.println("Converted JSON from URL-encoded string:");
+        System.out.println(convertToJSONObject(urlEncodedString).toString(4));
+
+        System.out.println("\nConverted JSON from JSON string:");
+        System.out.println(convertToJSONObject(jsonString).toString(4));
+    }
+}
