@@ -1,0 +1,31 @@
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import javax.json.Json;
+import javax.json.JsonObjectBuilder;
+
+public class UrlToJsonConverter {
+    public static void main(String[] args) {
+        String urlEncoded = "appToken=b59e7cd2-f1cc-430d-ace8-4faf3d63acba&ctrlblkid=9020&ctrlblksearchtyp=E&ctrlblkval=ABC&origin=DOM&sortField=AccountNumber&sortDirection=A&rows=10&page=1";
+        
+        try {
+            String jsonString = convertUrlEncodedToJson(urlEncoded);
+            System.out.println(jsonString);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    public static String convertUrlEncodedToJson(String urlEncoded) throws UnsupportedEncodingException {
+        JsonObjectBuilder builder = Json.createObjectBuilder();
+        String[] pairs = urlEncoded.split("&");
+        
+        for (String pair : pairs) {
+            String[] keyValue = pair.split("=");
+            String key = URLDecoder.decode(keyValue[0], "UTF-8");
+            String value = keyValue.length > 1 ? URLDecoder.decode(keyValue[1], "UTF-8") : "";
+            builder.add(key, value);
+        }
+        
+        return builder.build().toString();
+    }
+}
