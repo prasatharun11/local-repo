@@ -1,0 +1,26 @@
+function gzipAndBase64(inputStr) {
+    // Compress using pako (returns Uint8Array)
+    const compressed = pako.gzip(inputStr);
+
+    // Convert Uint8Array to binary string
+    let binary = '';
+    for (let i = 0; i < compressed.length; i++) {
+        binary += String.fromCharCode(compressed[i]);
+    }
+
+    // Base64 encode
+    return btoa(binary);
+}
+
+$.ajaxSetup({
+    beforeSend: function (jqXHR, settings) {
+        if (settings.data && typeof settings.data === "string") {
+            const compressedBase64 = gzipAndBase64(settings.data);
+            settings.data = compressedBase64;
+        }
+
+        jqXHR.setRequestHeader("Content-Encoding", "gzip");
+        settings.processData = false;
+        settings.contentType = "application/x-www-form-urlencoded";
+    }
+});
