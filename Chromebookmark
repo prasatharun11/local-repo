@@ -1,0 +1,36 @@
+javascript:(function(){
+  const loadPako = () => new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+
+  loadPako().then(() => {
+    const input = prompt('Enter Base64 Gzipped String:');
+    if (!input) return;
+
+    try {
+      const binary = atob(input);
+      const bytes = new Uint8Array([...binary].map(c => c.charCodeAt(0)));
+      const decompressed = pako.ungzip(bytes, { to: 'string' });
+
+      const ta = document.createElement('textarea');
+      ta.value = decompressed;
+      ta.style.position = 'fixed';
+      ta.style.top = '10px';
+      ta.style.left = '10px';
+      ta.style.width = '80%';
+      ta.style.height = '80%';
+      ta.style.zIndex = 10000;
+      ta.style.fontSize = '14px';
+      ta.style.padding = '10px';
+      ta.style.background = 'white';
+      ta.style.border = '1px solid #ccc';
+      document.body.appendChild(ta);
+    } catch (e) {
+      alert('Failed to decode or decompress: ' + e.message);
+    }
+  }).catch(() => alert('Failed to load pako.js'));
+})();
