@@ -1,0 +1,74 @@
+import org.apache.poi.ss.usermodel.*;
+import java.awt.GraphicsEnvironment;
+
+public class ExcelGenerator {
+    
+    static {
+        // Debug before setting properties
+        System.out.println("=== BEFORE SYSTEM PROPERTY SETTINGS ===");
+        System.out.println("Current headless state: " + GraphicsEnvironment.isHeadless());
+        System.out.println("Default font manager: " + System.getProperty("sun.font.fontmanager"));
+        printAvailableFonts();
+
+        // Set critical system properties
+        System.out.println("\n=== SETTING SYSTEM PROPERTIES ===");
+        setPropertyWithDebug("java.awt.headless", "true");
+        setPropertyWithDebug("sun.java2d.headless", "true");
+        setPropertyWithDebug("sun.awt.noerasebackground", "true");
+        setPropertyWithDebug("sun.awt.disablegdk", "true");
+        setPropertyWithDebug("org.apache.poi.ss.ignoreMissingFontSystem", "true");
+        setPropertyWithDebug("org.apache.poi.ss.usermodel.fontProvider", "none");
+        setPropertyWithDebug("sun.font.fontmanager", "sun.awt.X11FontManager");
+
+        // Debug after setting properties
+        System.out.println("\n=== AFTER SYSTEM PROPERTY SETTINGS ===");
+        System.out.println("Verified headless state: " + GraphicsEnvironment.isHeadless());
+        System.out.println("Active font manager: " + System.getProperty("sun.font.fontmanager"));
+        System.out.println("POI font system disabled: " + 
+            "true".equals(System.getProperty("org.apache.poi.ss.ignoreMissingFontSystem")));
+    }
+
+    private static void setPropertyWithDebug(String key, String value) {
+        System.out.println("Setting " + key + "=" + value);
+        System.setProperty(key, value);
+    }
+
+    private static void printAvailableFonts() {
+        try {
+            String[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                                         .getAvailableFontFamilyNames();
+            System.out.println("\nAvailable Fonts (" + fonts.length + "):");
+            for (String font : fonts) {
+                System.out.println(" - " + font);
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to retrieve font list: " + e.getMessage());
+        }
+    }
+
+    public static void generateExcel() {
+        System.out.println("\n=== EXCEL GENERATION START ===");
+        try (Workbook workbook = new HSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Data");
+            
+            // Test font usage
+            Font testFont = workbook.createFont();
+            testFont.setFontName("Arial");
+            System.out.println("Using font: " + testFont.getFontName());
+            
+            // Create sample content
+            Row row = sheet.createRow(0);
+            Cell cell = row.createCell(0);
+            cell.setCellValue("Test Content");
+            
+            System.out.println("Excel generated successfully");
+        } catch (Exception e) {
+            System.out.println("Excel generation failed: " + e.getMessage());
+        }
+        System.out.println("=== EXCEL GENERATION COMPLETE ===");
+    }
+
+    public static void main(String[] args) {
+        generateExcel();
+    }
+}
