@@ -1,0 +1,88 @@
+import org.apache.poi.ss.usermodel.*;
+import java.awt.GraphicsEnvironment;
+
+public class ExcelFontDebugger {
+
+    static {
+        printInitialEnvironment();
+        configureFontSettings();
+        printPostConfiguration();
+    }
+
+    private static void printInitialEnvironment() {
+        System.out.println("=== INITIAL ENVIRONMENT ===");
+        System.out.println("Operating System: " + System.getProperty("os.name"));
+        System.out.println("Java Version: " + System.getProperty("java.version"));
+        System.out.println("Headless Mode: " + GraphicsEnvironment.isHeadless());
+        printAvailableFonts();
+    }
+
+    private static void configureFontSettings() {
+        System.out.println("\n=== CONFIGURING FONT SETTINGS ===");
+        String[][] properties = {
+            {"java.awt.headless", "true"},
+            {"sun.java2d.headless", "true"},
+            {"org.apache.poi.ss.ignoreMissingFontSystem", "true"},
+            {"org.apache.poi.ss.usermodel.fontProvider", "none"},
+            {"sun.font.fontmanager", "sun.awt.X11FontManager"}
+        };
+
+        for (String[] prop : properties) {
+            System.setProperty(prop[0], prop[1]);
+            System.out.println("Set property: " + prop[0] + " = " + prop[1]);
+        }
+    }
+
+    private static void printPostConfiguration() {
+        System.out.println("\n=== CURRENT CONFIGURATION ===");
+        System.out.println("Headless Mode Status: " + GraphicsEnvironment.isHeadless());
+        System.out.println("Font System Enabled: " + 
+            !"true".equals(System.getProperty("org.apache.poi.ss.ignoreMissingFontSystem")));
+    }
+
+    public static void printAvailableFonts() {
+        try {
+            String[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getAvailableFontFamilyNames();
+            
+            System.out.println("\nAVAILABLE FONTS (" + fonts.length + "):");
+            for (int i = 0; i < fonts.length; i++) {
+                System.out.print((i+1) + ". " + fonts[i]);
+                if ((i+1) % 3 == 0) System.out.println();
+                else System.out.print("\t");
+            }
+            if (fonts.length % 3 != 0) System.out.println();
+        } catch (Exception e) {
+            System.out.println("Failed to list fonts: " + e.getMessage());
+        }
+    }
+
+    public static void testExcelGeneration() {
+        System.out.println("\n=== TESTING EXCEL GENERATION ===");
+        try (Workbook workbook = WorkbookFactory.create(true)) {
+            Sheet sheet = workbook.createSheet("Test");
+            
+            // Test basic font usage
+            Font font = workbook.createFont();
+            font.setFontName("Arial");
+            System.out.println("Test font 'Arial' available: " + 
+                isFontAvailable("Arial"));
+            
+            System.out.println("Excel file created successfully");
+        } catch (Exception e) {
+            System.out.println("Excel creation failed: " + e.getMessage());
+        }
+    }
+
+    private static boolean isFontAvailable(String fontName) {
+        for (String font : GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .getAvailableFontFamilyNames()) {
+            if (font.equalsIgnoreCase(fontName)) return true;
+        }
+        return false;
+    }
+
+    public static void main(String[] args) {
+        testExcelGeneration();
+    }
+}
