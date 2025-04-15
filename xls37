@@ -1,0 +1,80 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import java.util.List;
+
+public class ExcelUtil {
+
+    /**
+     * Sets the width of a column based on the length of the longest cell content.
+     * Ignores merged cells in calculations. Safe for headless environments.
+     *
+     * @param sheet       The sheet containing the column
+     * @param columnIndex The column to resize
+     * @param mergedRegions List of merged regions in the sheet
+     */
+    public static void safeAutoSizeColumn(Sheet sheet, int columnIndex, List<CellRangeAddress> mergedRegions) {
+        int maxLength = 0;
+
+        for (Row row : sheet) {
+            Cell cell = row.getCell(columnIndex);
+            if (cell != null && !isInMergedRegion(row.getRowNum(), columnIndex, mergedRegions)) {
+                String cellValue = getCellStringValue(cell);
+                if (cellValue != null) {
+                    maxLength = Math.max(maxLength, cellValue.length());
+                }
+            }
+        }
+
+        // Estimate: 1 char ≈ 256 units (Excel uses 1/256th of a character width)
+        int width = (maxLength + 2) * 256; // +2 for padding
+        sheet.setColumnWidth(columnIndex, Math.min(width, 255 * 256)); // Excel max width = 255 chars
+    }
+
+    /**
+     * Checks if a cell is part of any merged region
+     *
+     * @param rowNum       The row index of the cell
+     * @param colNum       The column index of the cell
+     * @param mergedRegions List of merged regions to check against
+     * @return true if the cell is in a merged region
+     */
+    private static boolean isInMergedRegion(int rowNum, int colNum, List<CellRangeAddress> mergedRegions) {
+        for (CellRangeAddress region : mergedRegions) {
+            if (region.isInRange(rowNum, colNum)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Converts a cell to its string representation.
+     *
+     * @param cell The cell to convert.
+     * @return A string representation of the cell.
+     */
+    private static String getCellStringValue(Cell cell) {
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                return String.valueOf(cell.getNumericCellValue());
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                try {
+                    return cell.getStringCellValue();
+                } catch (Exception e) {
+                    try {
+                        return String.valueOf(cell.getNumericCellValue());
+                    } catch (Exception ex) {
+                        return cell.getCellFormula();
+                    }
+                }
+            case BLANK:
+                return "";
+            default:
+                return "";
+        }
+    }
+}
