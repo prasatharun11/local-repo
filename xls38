@@ -1,0 +1,4 @@
+// Add this at the start of your application (e.g., main() method)
+System.setProperty("java.awt.headless", "true"); // Force headless mode
+System.setProperty("org.apache.poi.ss.ignoreMissingFontSystem", "true"); // Skip font checks
+System.setProperty("org.apache.poi.ss.usermodel.fontProvider", "none"); // Disable font metrics
