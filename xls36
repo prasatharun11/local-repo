@@ -1,0 +1,60 @@
+import org.apache.poi.ss.usermodel.*;
+
+public class ExcelUtil {
+
+    /**
+     * Sets the width of a column based on the length of the longest cell content.
+     * Safe for headless environments (no font rendering).
+     *
+     * @param sheet       The sheet containing the column.
+     * @param columnIndex The column to resize.
+     */
+    public static void safeAutoSizeColumn(Sheet sheet, int columnIndex) {
+        int maxLength = 0;
+
+        for (Row row : sheet) {
+            Cell cell = row.getCell(columnIndex);
+            if (cell != null) {
+                String cellValue = getCellStringValue(cell);
+                if (cellValue != null) {
+                    maxLength = Math.max(maxLength, cellValue.length());
+                }
+            }
+        }
+
+        // Estimate: 1 char ≈ 256 units (Excel uses 1/256th of a character width)
+        int width = (maxLength + 2) * 256; // +2 for padding
+        sheet.setColumnWidth(columnIndex, Math.min(width, 255 * 256)); // Excel max width = 255 chars
+    }
+
+    /**
+     * Converts a cell to its string representation.
+     *
+     * @param cell The cell to convert.
+     * @return A string representation of the cell.
+     */
+    private static String getCellStringValue(Cell cell) {
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                return String.valueOf(cell.getNumericCellValue());
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                try {
+                    return cell.getStringCellValue(); // May throw
+                } catch (Exception e) {
+                    try {
+                        return String.valueOf(cell.getNumericCellValue());
+                    } catch (Exception ex) {
+                        return cell.getCellFormula();
+                    }
+                }
+            case BLANK:
+                return "";
+            default:
+                return "";
+        }
+    }
+}
