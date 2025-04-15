@@ -1,0 +1,34 @@
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+
+public class DisablePOILogs {
+    public static void disablePOIDebugLogs() {
+        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
+        Configuration config = ctx.getConfiguration();
+        
+        // Disable logs for org.apache.poi.hssf.model.*
+        LoggerConfig loggerConfig = config.getLoggerConfig("org.apache.poi.hssf.model");
+        loggerConfig.setLevel(Level.WARN);
+        
+        // Optionally disable all POI logs (broader suppression)
+        LoggerConfig poiLoggerConfig = config.getLoggerConfig("org.apache.poi");
+        poiLoggerConfig.setLevel(Level.WARN);
+        
+        ctx.updateLoggers();
+    }
+}
+
+
+
+
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
+
+// Disable logs for org.apache.poi.hssf.model.*
+Configurator.setLevel("org.apache.poi.hssf.model", Level.WARN);
+
+// Optionally disable all POI logs
+Configurator.setLevel("org.apache.poi", Level.WARN);
