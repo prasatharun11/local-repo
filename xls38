@@ -1,3 +1,15 @@
+
+// Disable font subsystem checks completely
+System.setProperty("java.awt.headless", "true");
+System.setProperty("org.apache.poi.ss.ignoreMissingFontSystem", "true");
+System.setProperty("org.apache.poi.ss.usermodel.fontProvider", "none");
+
+// Workaround for FontConfiguration error
+System.setProperty("sun.java2d.headless", "true");
+System.setProperty("sun.font.fontmanager", "sun.awt.X11FontManager"); // Force basic font manager
+
+
+
 // Add this at the start of your application (e.g., main() method)
 System.setProperty("java.awt.headless", "true"); // Force headless mode
 System.setProperty("org.apache.poi.ss.ignoreMissingFontSystem", "true"); // Skip font checks
