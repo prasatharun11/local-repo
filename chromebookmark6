@@ -1,0 +1,64 @@
+javascript:(function(){
+  const loadScript = (src, cb) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = cb;
+    document.head.appendChild(s);
+  };
+
+  loadScript('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js', function() {
+    const input = prompt("Paste your Base64 Gzip encoded string:");
+    if (!input) return;
+
+    try {
+      const binary = atob(input);
+      const bytes = new Uint8Array([...binary].map(c => c.charCodeAt(0)));
+      const result = pako.ungzip(bytes, { to: 'string' });
+
+      // Parse query string into object
+      const obj = {};
+      result.split("&").forEach(pair => {
+        const [k, v] = pair.split("=");
+        obj[decodeURIComponent(k)] = decodeURIComponent(v || "");
+      });
+
+      const jsonStr = JSON.stringify(obj, null, 2);
+
+      const escapeHtml = str => str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const safeContent = escapeHtml(jsonStr);
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Decoded JSON</title>
+          <style>
+            body { font-family: monospace; padding: 1em; background: #f9f9f9; }
+            pre { white-space: pre-wrap; word-break: break-word; background: #fff; padding: 1em; border: 1px solid #ccc; border-radius: 5px; }
+            button { margin-top: 1em; margin-right: 10px; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; }
+            .copy { background: #4CAF50; color: white; }
+            .close { background: #f44336; color: white; }
+          </style>
+        </head>
+        <body>
+          <pre id="json">${safeContent}</pre>
+          <button class="copy" onclick="navigator.clipboard.writeText(document.getElementById('json').innerText)">Copy</button>
+          <button class="close" onclick="window.close()">Close</button>
+        </body>
+        </html>
+      `;
+
+      const newWin = window.open();
+      newWin.document.open();
+      newWin.document.write(html);
+      newWin.document.close();
+
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  });
+})();
