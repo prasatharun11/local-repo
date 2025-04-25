@@ -1,0 +1,57 @@
+plugins {
+    id 'java'
+    id 'war'
+    id 'eclipse-wtp'
+}
+
+group = 'com.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    providedCompile('javax.servlet:javax.servlet-api:3.1.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+
+    // Add the Closure Compiler dependency
+    implementation 'com.google.javascript:closure-compiler-unshaded:v20240416' // Use the latest version
+}
+
+task optimizeJs(type: JavaExec) {
+    classpath = configurations.runtimeClasspath // Use the project's runtime classpath
+    mainClass = 'com.google.javascript.jscomp.CommandLineRunner'
+
+    args = [
+            '--compilation_level', 'SIMPLE_OPTIMIZATIONS',
+            '--js', fileTree('src/main/webapp/js').getAsPath(),
+            '--js_output_file', 'build/optimized-js/app.min.js'
+    ]
+
+    // Optional: Add externs if needed for advanced optimizations
+    // if (file('src/main/webapp/js/externs.js').exists()) {
+    //     args += ['--externs', file('src/main/webapp/js/externs.js').getAsPath()]
+    // }
+}
+
+war {
+    dependsOn optimizeJs
+    from('build/optimized-js') {
+        into 'js'
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+eclipse {
+    wtp {
+        facet {
+            facet name: 'jst.web', version: '3.0'
+            facet name: 'java', version: '1.8'
+        }
+    }
+}
