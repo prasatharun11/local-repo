@@ -1,0 +1,19 @@
+task optimizeJs(type: JavaExec) {
+    classpath = configurations.runtimeClasspath
+    mainClass = 'com.google.javascript.jscomp.CommandLineRunner'
+
+    args = ['--compilation_level', 'SIMPLE_OPTIMIZATIONS']
+
+    fileTree('src/main/webapp/ir_js').visit { FileVisitDetails details ->
+        if (details.name.endsWith('.js')) {
+            args += ['--js', details.file.absolutePath]
+        }
+    }
+
+    args += ['--js_output_file', file("${project.buildDir}/optimized-js/app.min.js").getAbsolutePath()]
+
+    // Optional: Add externs if needed
+    if (file('src/main/webapp/ir_js/externs.js').exists()) {
+        args += ['--externs', file('src/main/webapp/ir_js/externs.js').getAbsolutePath()]
+    }
+}
