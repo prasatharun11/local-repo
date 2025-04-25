@@ -1,0 +1,16 @@
+plugins {
+    id 'com.google.javascript.closure-compiler' version '1.0.0'
+}
+
+closureCompile {
+    files = fileTree('src/main/webapp/js') {
+        include '**/*.js'
+    }
+
+    outputFile = file('src/main/webapp/obfuscated/app.min.js')
+
+    options.compilationLevel = 'ADVANCED'
+    options.languageIn = 'ECMASCRIPT6'
+    options.languageOut = 'ECMASCRIPT5'
+    options.warningLevel = 'VERBOSE'
+}
