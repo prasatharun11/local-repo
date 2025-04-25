@@ -1,0 +1,73 @@
+javascript:(function(){ 
+  const win = window.open('', '_blank'); 
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Base64 Gzip Decoder</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; }
+        textarea { width: 100%; height: 150px; padding: 10px; font-family: monospace; }
+        pre { background: white; padding: 15px; border: 1px solid #ccc; border-radius: 5px; white-space: pre-wrap; word-break: break-word; margin-top: 20px; }
+        button { margin-top: 10px; padding: 10px 15px; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <h2>Paste Base64 Gzip Encoded String</h2>
+      <textarea id="input" placeholder="Paste here..."></textarea><br>
+      <button onclick="decode()">Decode</button>
+      <pre id="output"></pre>
+
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+      <script>
+        function decode() {
+          try {
+            const input = document.getElementById('input').value.trim();
+            if (!input) return;
+
+            const binaryString = atob(input.replace(/\\s/g, ''));
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const decompressed = pako.ungzip(bytes, { to: 'string' });
+
+            let output;
+            try {
+              output = JSON.parse(decompressed);
+              if (typeof output === 'string') {
+                output = JSON.parse(output);
+              }
+              output = JSON.stringify(output, null, 2);
+            } catch (e) {
+              if (decompressed.includes('=') && decompressed.includes('&')) {
+                const params = new URLSearchParams(decompressed);
+                const obj = {};
+                params.forEach((value, key) => {
+                  if (obj.hasOwnProperty(key)) {
+                    if (Array.isArray(obj[key])) {
+                      obj[key].push(value);
+                    } else {
+                      obj[key] = [obj[key], value];
+                    }
+                  } else {
+                    obj[key] = value;
+                  }
+                });
+                output = JSON.stringify(obj, null, 2);
+              } else {
+                output = decompressed;
+              }
+            }
+
+            document.getElementById('output').textContent = output;
+          } catch (err) {
+            document.getElementById('output').textContent = 'Error: ' + err.message;
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+})();
