@@ -1,0 +1,76 @@
+plugins {
+    id 'java'
+    id 'war'
+    id 'eclipse-wtp'
+}
+
+group = 'com.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    providedCompile('javax.servlet:javax.servlet-api:3.1.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+
+    implementation 'com.google.javascript:closure-compiler-unshaded:v20240304' // Or your chosen version
+}
+
+def isOptimizeJsEnabled = project.hasProperty('gradle.optimizeJs') ? project.getProperty('gradle.optimizeJs').toBoolean() : false
+
+task minifyJs(type: JavaExec, enabled: isOptimizeJsEnabled) {
+    classpath = configurations.runtimeClasspath
+    mainClass = 'com.google.javascript.jscomp.CommandLineRunner'
+
+    def jsSrcDir = file('src/main/webapp/ir_js')
+    def jsOutputDir = file('build/minified-js/ir_js')
+
+    outputs.dir jsOutputDir
+
+    args = ['--compilation_level', 'SIMPLE_OPTIMIZATIONS', '--js_output_file', jsOutputDir.getAbsolutePath() + '/%s.min.js']
+
+    fileTree(jsSrcDir).visit { FileVisitDetails details ->
+        if (details.name.endsWith('.js')) {
+            def relativePath = details.relativePath.toString()
+            args += ['--js', details.file.absolutePath + '//' + relativePath]
+        }
+    }
+
+    if (file('src/main/webapp/ir_js/externs.js').exists()) {
+        args += ['--externs', file('src/main/webapp/ir_js/externs.js').getAbsolutePath()]
+    }
+}
+
+war {
+    if (isOptimizeJsEnabled) {
+        dependsOn minifyJs
+        from('build/minified-js/ir_js') {
+            into 'js'
+        }
+    } else {
+        from('src/main/webapp/ir_js') {
+            into 'js'
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+eclipse {
+    wtp {
+        facet {
+            facet name: 'jst.web', version: '3.0'
+            facet name: 'java', version: '1.8' // Adjust as needed
+        }
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
