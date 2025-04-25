@@ -1,0 +1,76 @@
+import jakarta.servlet.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class MinifyScriptFilter implements Filter {
+
+    private boolean isOptimizeEnabled = false;
+
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+        String optimizeParam = filterConfig.getServletContext().getInitParameter("optimizeJs");
+        isOptimizeEnabled = Boolean.parseBoolean(optimizeParam);
+    }
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        if (isOptimizeEnabled && request instanceof HttpServletRequest && response instanceof HttpServletResponse) {
+            HttpServletRequest httpRequest = (HttpServletRequest) request;
+            HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+            CharResponseWrapper responseWrapper = new CharResponseWrapper(httpResponse);
+            chain.doFilter(httpRequest, responseWrapper);
+
+            String originalContent = responseWrapper.toString();
+            String modifiedContent = rewriteScriptPaths(originalContent);
+
+            httpResponse.setContentType(response.getContentType());
+            PrintWriter out = httpResponse.getWriter();
+            out.write(modifiedContent);
+        } else {
+            chain.doFilter(request, response);
+        }
+    }
+
+    @Override
+    public void destroy() {
+        // Cleanup if needed
+    }
+
+    private String rewriteScriptPaths(String content) {
+        Pattern scriptSrcPattern = Pattern.compile("<script\\s+src=\"(js/[^\\.]+\\.js)\"");
+        Matcher matcher = scriptSrcPattern.matcher(content);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String originalSrc = matcher.group(1);
+            String minifiedSrc = originalSrc.replace(".js", ".min.js");
+            matcher.appendReplacement(sb, "<script src=\"" + minifiedSrc + "\"");
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+}
+
+// Utility class to wrap the response and capture the output
+class CharResponseWrapper extends HttpServletResponseWrapper {
+    private CharArrayWriter output;
+
+    public CharResponseWrapper(HttpServletResponse response) {
+        super(response);
+        output = new CharArrayWriter();
+    }
+
+    @Override
+    public PrintWriter getWriter() throws IOException {
+        return new PrintWriter(output);
+    }
+
+    @Override
+    public String toString() {
+        return output.toString();
+    }
+}
