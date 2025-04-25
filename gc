@@ -1,0 +1,14 @@
+plugins {
+    id 'com.google.javascript.closure-compiler' version '1.0.0'
+}
+
+closureCompile {
+    files = fileTree('src/main/webapp/js') {
+        include '**/*.js'
+        exclude '**/*.min.js'
+    }
+    
+    options.compilationLevel = 'SIMPLE'
+    options.warningLevel = 'VERBOSE'
+    // outputs to build/closure-compiler by default
+}
