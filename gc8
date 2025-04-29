@@ -1,0 +1,209 @@
+That's an interesting challenge! You're looking for a robust and Java-centric way to handle JavaScript minification in your JSP-based Gradle project, with environment-aware delivery. Let's explore a solution that leverages the power of Gradle and a suitable Java library.
+Here's a potential approach that addresses all your requirements:
+1. JavaScript Minification with google-closure-compiler
+We can use the Google Closure Compiler, a well-regarded and efficient JavaScript minifier written in Java. Gradle provides excellent support for integrating Java-based tools into the build process.
+Gradle Configuration (build.gradle)
+plugins {
+    id 'java'
+    id 'war'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.google.javascript:closure-compiler:v20240428' // Use the latest version
+    providedCompile 'javax.servlet:javax.servlet-api:4.0.1' // Or your servlet API version
+}
+
+task minifyJs(type: JavaExec) {
+    description = 'Minifies JavaScript files using Google Closure Compiler'
+    group = 'build'
+
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set('com.google.javascript.jscomp.CommandLineRunner')
+
+    def jsSrcDir = file('src/main/webapp/js') // Your JavaScript source directory
+    def jsMinDir = file('build/minifiedJs')  // Output directory for minified files
+
+    outputs.dir jsMinDir
+
+    args = [
+            '--js', fileTree(dir: jsSrcDir).include('*.js').getAsPath(),
+            '--js_output_file', new File(jsMinDir, '%s.min.js').getAbsolutePath(),
+            '--compilation_level', 'SIMPLE_OPTIMIZATIONS', // Or 'ADVANCED_OPTIMIZATIONS'
+            '--create_source_map', '%s.min.js.map',
+            '--source_map_format', 'V3',
+            '--output_wrapper', '(function(){%output%})();' // Optional: wrap in a closure
+    ]
+
+    // Dynamically replace the output placeholder in --js_output_file
+    doFirst {
+        args = args.collect { arg ->
+            if (arg.contains('%s')) {
+                arg.replace('%s', relativePath(jsSrcDir, new File(arg.substring(arg.lastIndexOf('/') + 1, arg.lastIndexOf('.')))))
+            } else {
+                arg
+            }
+        }
+    }
+}
+
+war.dependsOn minifyJs
+
+// Clean up the minified directory on clean
+clean.doLast {
+    delete 'build/minifiedJs'
+}
+
+Explanation of the Gradle Configuration:
+ * plugins { ... }: Applies the java and war plugins for a Java web application.
+ * repositories { ... }: Includes Maven Central to fetch the Closure Compiler dependency.
+ * dependencies { ... }: Adds the Google Closure Compiler library as a dependency.
+ * task minifyJs(type: JavaExec) { ... }: Defines a new Gradle task named minifyJs that executes a Java program.
+   * description and group: Provide metadata for the task.
+   * classpath: Sets the classpath to include the runtime dependencies of the main source set (which includes the Closure Compiler).
+   * mainClass.set(...): Specifies the entry point class for the Closure Compiler.
+   * def jsSrcDir = ... and def jsMinDir = ...: Define the input and output directories for JavaScript files. Make sure src/main/webapp/js matches your actual JavaScript source directory.
+   * outputs.dir jsMinDir: Declares the output directory for Gradle's dependency tracking.
+   * args = [...]: Defines the command-line arguments passed to the Closure Compiler:
+     * '--js', fileTree(...).getAsPath(): Specifies all .js files in the source directory as input.
+     * '--js_output_file', new File(...).getAbsolutePath(): Defines the output file pattern. We use %s as a placeholder for the base filename.
+     * '--compilation_level': Sets the optimization level (you can choose between SIMPLE_OPTIMIZATIONS, WHITESPACE_ONLY, or ADVANCED_OPTIMIZATIONS). ADVANCED_OPTIMIZATIONS provides the best compression but might require careful consideration of your JavaScript code due to renaming.
+     * '--create_source_map' and '--source_map_format': Generates source maps for easier debugging of minified code in browsers.
+     * '--output_wrapper': Optionally wraps the minified code in a closure to avoid potential global scope conflicts.
+   * doFirst { ... }: A Gradle action that executes before the main task action. It dynamically replaces the %s placeholder in the --js_output_file argument with the relative path of the input JavaScript file (without the .js extension), ensuring the output filenames match the input filenames with a .min.js extension.
+ * war.dependsOn minifyJs: Ensures that the minifyJs task runs before the war task, so the minified files are available when the WAR file is created.
+ * clean.doLast { ... }: Deletes the build/minifiedJs directory when the clean task is executed.
+2. Environment-Aware Script Inclusion
+Now, let's handle the dynamic inclusion of either the original or the minified JavaScript files based on the environment. We can achieve this using a Java filter.
+Java Filter (ScriptVersionFilter.java)
+import javax.servlet.*;
+import javax.servlet.annotation.WebFilter;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+@WebFilter("*.jsp")
+public class ScriptVersionFilter implements Filter {
+
+    private String environment;
+
+    @Override
+    public void init(FilterConfig config) throws ServletException {
+        environment = config.getServletContext().getInitParameter("environment");
+        if (environment == null) {
+            environment = "development"; // Default to development
+        }
+    }
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        HttpServletResponse httpResponse = (HttpServletResponse) response;
+        String uri = httpRequest.getRequestURI();
+
+        if (uri.endsWith(".jsp")) {
+            HttpServletResponseWrapper responseWrapper = new HttpServletResponseWrapper(httpResponse) {
+                private StringBuilder output = new StringBuilder();
+
+                @Override
+                public voidgetWriter() throws IOException {
+                    return new java.io.PrintWriter(new java.io.StringWriter() {
+                        @Override
+                        public void write(String str) {
+                            output.append(str);
+                        }
+
+                        @Override
+                        public String toString() {
+                            String content = super.toString();
+                            if (environment.equalsIgnoreCase("production")) {
+                                content = content.replaceAll("<script src=\"(.*?)\\.js\"></script>",
+                                        "<script src=\"$1.min.js\"></script>");
+                            }
+                            return content;
+                        }
+                    });
+                }
+
+                @Override
+                public void flushBuffer() throws IOException {
+                    getWriter().flush();
+                    response.getWriter().write(getWriter().toString());
+                    super.flushBuffer();
+                }
+            };
+            chain.doFilter(request, responseWrapper);
+        } else {
+            chain.doFilter(request, response);
+        }
+    }
+
+    @Override
+    public void destroy() {
+        // Cleanup resources if needed
+    }
+}
+
+Web Deployment Descriptor (web.xml) or @WebFilter Annotation:
+The @WebFilter("*.jsp") annotation in the filter class registers it to intercept all JSP requests.
+Context Parameter in web.xml (if not using @WebFilter):
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
+                             http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+         version="4.0">
+
+    <context-param>
+        <param-name>environment</param-name>
+        <param-value>development</param-value> </context-param>
+
+    </web-app>
+
+Explanation of the Filter:
+ * @WebFilter("*.jsp"): This annotation (or the equivalent XML configuration) tells the servlet container to apply this filter to all requests ending with .jsp.
+ * init(FilterConfig config): This method is called when the filter is initialized. It retrieves the environment context parameter from the web application configuration. It defaults to "development" if the parameter is not set.
+ * doFilter(ServletRequest request, ServletResponse response, FilterChain chain): This is the core method of the filter.
+   * It checks if the requested URI ends with .jsp.
+   * If it's a JSP, it wraps the HttpServletResponse with a custom HttpServletResponseWrapper.
+   * The getWriter() of the wrapper is overridden to capture the output of the JSP.
+   * Before writing the captured content to the original response, it checks the environment variable.
+   * If the environment is "production" (case-insensitive), it performs a regular expression replacement:
+     content = content.replaceAll("<script src=\"(.*?)\\.js\"></script>",
+                            "<script src=\"$1.min.js\"></script>");
+
+     This regex finds all <script> tags with a .js extension in the src attribute and replaces it with the same path but with a .min.js extension.
+   * Finally, it writes the modified (or original) content to the actual response.
+   * If the request is not for a JSP, it simply passes the request down the filter chain.
+ * destroy(): A cleanup method (not strictly necessary in this case).
+How to Use in Your JSPs:
+In your JSP files, you continue to include your JavaScript files as you normally would:
+<script src="js/myScript.js"></script>
+<script src="js/utils.js"></script>
+
+Deployment:
+ * Place your JavaScript files in the src/main/webapp/js directory (or your preferred location, updating the jsSrcDir variable in build.gradle).
+ * Run the Gradle build (./gradlew build). This will execute the minifyJs task, generating the .min.js files in the build/minifiedJs directory. The WAR file will include both the original and the minified JavaScript files.
+ * Deploy the generated WAR file to your servlet container.
+ * Crucially, set the environment context parameter in your servlet container's configuration (e.g., Tomcat's context.xml or environment variables) to production when deploying to your production environment. For development or testing, you can leave it as development or omit it to use the default.
+Alternative: Centralized JSP Logic (Less Recommended for Maintainability)
+While a filter is generally cleaner, you could also implement this logic within a centralized JSP include or a custom tag. However, this would require modifying every JSP that includes JavaScript, which contradicts one of your requirements. A filter provides a more transparent and less intrusive solution.
+Advantages of this Solution:
+ * Java-based: Uses the Google Closure Compiler, a robust Java tool.
+ * Open Source: Both Gradle and Google Closure Compiler are open-source.
+ * Gradle Integration: Seamlessly integrates into your Gradle build process.
+ * Automatic Minification: The minifyJs task automatically generates .min.js files during the build.
+ * Environment-Aware: The filter dynamically rewrites script paths based on the environment context parameter.
+ * No Manual JSP Edits: You don't need to change the <script src="..."> tags in your JSPs.
+ * Works with Existing Structure: Assumes your existing JavaScript files are in a webapp-accessible directory.
+Considerations:
+ * Build Time: The minification process will add to your build time.
+ * Advanced Optimizations: If you use ADVANCED_OPTIMIZATIONS, ensure your JavaScript code is written in a way that is compatible with its renaming and dead-code elimination strategies (e.g., using proper JSDoc annotations for externs).
+ * Source Maps: The generated .map files can be deployed to your production environment to allow browsers to map errors in the minified code back to the original source files, aiding debugging. You might need to configure your web server to serve these .map files.
+ * Error Handling: You might want to add more robust error handling to the minifyJs task in case the Closure Compiler encounters issues.
+ * Alternative Minifiers: While you requested a Java-based solution, other Java-based minifiers like YUI Compressor (though less actively maintained) could also be integrated similarly.
+This approach provides a comprehensive solution to your problem, automating JavaScript minification and ensuring environment-specific script inclusion without requiring manual changes to your JSP files. Remember to configure the environment context parameter appropriately for your different deployment stages.
