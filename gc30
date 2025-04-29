@@ -1,0 +1,43 @@
+task minifyJs {
+    description = 'Minifies JS files with UTF-8 encoding in parallel'
+    group = 'build'
+    outputs.dir jsMinDir
+
+    doFirst {
+        jsMinDir.mkdirs()
+    }
+
+    doLast {
+        // Collect all configuration first (on Gradle-managed thread)
+        def classpath = configurations.runtimeClasspath
+        
+        // Then process files in parallel
+        fileTree(jsSrcDir).matching {
+            include '**/*.js'
+            exclude '**/minifiedJs/**'
+            exclude '**/*.min.js'
+        }.parallelEach { jsFile ->
+            def relativePath = jsSrcDir.toPath().relativize(jsFile.toPath())
+            def minifiedFile = new File(jsMinDir, relativePath.toString().replace('.js', '.min.js'))
+            minifiedFile.parentFile.mkdirs()
+
+            new JavaExecSpec() {
+                executable = 'java'
+                args = [
+                    '-cp',
+                    classpath.asPath,
+                    'com.google.javascript.jscomp.CommandLineRunner',
+                    '--js', jsFile.absolutePath,
+                    '--js_output_file', minifiedFile.absolutePath,
+                    '--compilation_level', 'SIMPLE_OPTIMIZATIONS',
+                    '--charset', 'UTF-8',
+                    '--warning_level', 'QUIET',
+                    '--language_in', 'ECMASCRIPT_NEXT',
+                    '--language_out', 'ECMASCRIPT5'
+                ]
+            }.execute()
+            
+            println "Minified ${jsFile.name} → ${minifiedFile.name} (UTF-8)"
+        }
+    }
+}
