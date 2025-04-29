@@ -1,0 +1,60 @@
+plugins {
+    id 'java'
+    id 'war'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.google.javascript:closure-compiler:v20240428'
+    providedCompile 'javax.servlet:javax.servlet-api:4.0.1'
+}
+
+def jsSrcDir = file('src/main/webapp/ir_js')
+def jsMinDir = file('src/main/webapp/ir_js/minifiedJs')
+
+task minifyJs {
+    description = 'Recursively minifies JavaScript files using Google Closure Compiler'
+    group = 'build'
+    outputs.dir jsMinDir
+
+    doFirst {  
+        jsMinDir.mkdirs()  
+    }  
+
+    doLast {  
+        fileTree(jsSrcDir).matching {
+            include '**/*.js'
+            exclude '**/minifiedJs/**'
+            exclude '**/*.min.js'
+        }.each { jsFile ->
+            def relSubPath = jsSrcDir.toPath().relativize(jsFile.parentFile.toPath())
+            def minifiedDir = new File(jsMinDir, relSubPath.toString())
+            minifiedDir.mkdirs()
+
+            def baseName = jsFile.name[0..-4]  
+            def minifiedFile = new File(minifiedDir, "${baseName}.min.js")  
+            def sourceMapFile = new File(minifiedDir, "${baseName}.min.js.map")  
+
+            javaexec {  
+                classpath = configurations.runtimeClasspath  
+                mainClass.set('com.google.javascript.jscomp.CommandLineRunner')  
+                args = [  
+                    '--js', jsFile.absolutePath,  
+                    '--js_output_file', minifiedFile.absolutePath,  
+                    '--create_source_map', sourceMapFile.absolutePath,  
+                    '--compilation_level', 'SIMPLE_OPTIMIZATIONS',  
+                    '--source_map_format', 'V3'  
+                ]  
+            }
+        }
+    }
+}
+
+war.dependsOn minifyJs
+
+clean.doLast {
+    delete jsMinDir
+}
