@@ -1,0 +1,42 @@
+task minifyJs {
+    description = 'Minifies and obfuscates JS files with advanced optimizations'
+    group = 'build'
+    outputs.dir jsMinDir
+
+    doFirst {
+        jsMinDir.mkdirs()
+    }
+
+    doLast {
+        fileTree(jsSrcDir).matching {
+            include '**/*.js'
+            exclude '**/minifiedJs/**'
+            exclude '**/*.min.js'
+        }.each { jsFile ->
+            def relativePath = jsSrcDir.toPath().relativize(jsFile.toPath())
+            def minifiedFile = new File(jsMinDir, relativePath.toString().replace('.js', '.min.js'))
+            minifiedFile.parentFile.mkdirs()
+
+            javaexec {
+                classpath = configurations.runtimeClasspath
+                mainClass = 'com.google.javascript.jscomp.CommandLineRunner'
+                args = [
+                    '--js', jsFile.absolutePath,
+                    '--js_output_file', minifiedFile.absolutePath,
+                    '--compilation_level', 'ADVANCED_OPTIMIZATIONS', // Aggressive minification & obfuscation
+                    '--charset', 'UTF-8',
+                    '--language_in', 'ECMASCRIPT_NEXT',
+                    '--language_out', 'ECMASCRIPT5',
+                    '--assume_function_wrapper', // Helps with scope isolation
+                    '--rename_variable_prefix', 'x_', // Obfuscates variable names
+                    '--use_types_for_optimization', // Better dead code elimination
+                    '--isolation_mode', 'IIFE', // Wraps code in IIFE for scope protection
+                    '--warning_level', 'QUIET',
+                    '--generate_exports', // Helps if using exports
+                    '--module_resolution', 'NODE' // Better handling of imports
+                ]
+            }
+            println "Obfuscated ${jsFile.name} → ${minifiedFile.name}"
+        }
+    }
+}
