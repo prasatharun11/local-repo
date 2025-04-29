@@ -1,0 +1,52 @@
+task minifyJs(type: JavaExec) {
+    description = 'Minifies JavaScript files using Google Closure Compiler'
+    group = 'build'
+
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set('com.google.javascript.jscomp.CommandLineRunner')
+
+    def jsSrcDir = file('src/main/webapp/js') // Your JavaScript source directory
+    def jsMinDir = file('build/minifiedJs')  // Output directory for minified files
+
+    outputs.dir jsMinDir
+
+    args = [
+            '--js', fileTree(dir: jsSrcDir).include('*.js').getAsPath(),
+            '--js_output_file', '', // Placeholder, will be updated in doLast
+            '--compilation_level', 'SIMPLE_OPTIMIZATIONS', // Or 'ADVANCED_OPTIMIZATIONS'
+            '--create_source_map', '', // Placeholder
+            '--source_map_format', 'V3',
+            '--output_wrapper', '(function(){%output%})();' // Optional: wrap in a closure
+    ]
+
+    doLast {
+        jsSrcDir.listFiles { it.name.endsWith('.js') }.each { jsFile ->
+            def baseName = jsFile.name.substring(0, jsFile.name.lastIndexOf('.'))
+            def minifiedFile = new File(jsMinDir, "${baseName}.min.js")
+            def sourceMapFile = new File(jsMinDir, "${baseName}.min.js.map")
+
+            javaexec {
+                classpath = sourceSets.main.runtimeClasspath
+                mainClass.set('com.google.javascript.jscomp.CommandLineRunner')
+                args = [
+                        '--js', jsFile.getAbsolutePath(),
+                        '--js_output_file', minifiedFile.getAbsolutePath(),
+                        '--compilation_level', task.minifyJs.args.find { it.startsWith('--compilation_level') }.split(' ')[1],
+                        '--create_source_map', sourceMapFile.getAbsolutePath(),
+                        '--source_map_format', task.minifyJs.args.find { it.startsWith('--source_map_format') }.split(' ')[1],
+                        '--output_wrapper', task.minifyJs.args.find { it.startsWith('--output_wrapper') }?.split(' ')[1] ?: ''
+                ].findAll() // Remove null or empty arguments
+            }
+        }
+    }
+
+    // Remove the doFirst block
+    // doFirst { ... }
+}
+
+war.dependsOn minifyJs
+
+// Clean up the minified directory on clean
+clean.doLast {
+    delete 'build/minifiedJs'
+}
