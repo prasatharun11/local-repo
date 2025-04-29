@@ -1,0 +1,43 @@
+import java.util.regex.*;
+
+public class JsPathReplacer {
+    
+    public static String replaceUnminifiedJsPaths(String htmlContent) {
+        if (htmlContent == null || htmlContent.isEmpty()) {
+            return htmlContent;
+        }
+
+        // Pattern explanation:
+        // 1. (src=[\"']) - matches src attribute with either single or double quotes
+        // 2. (ir_js/(?!minifiedJs/)(.*?)\.js) - matches ir_js paths that don't contain minifiedJs
+        // 3. ([\"']) - matches the closing quote
+        Pattern pattern = Pattern.compile("(src=[\"'])(ir_js/(?!minifiedJs/)(.*?)\\.js)([\"'])", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(htmlContent);
+        StringBuffer result = new StringBuffer();
+
+        while (matcher.find()) {
+            String originalPath = matcher.group(2);
+            // Skip if this is already a minified path (just in case)
+            if (originalPath.contains(".min.js")) {
+                continue;
+            }
+            
+            // Build the replacement path
+            String replacementPath = "ir_js/minifiedJs/" + matcher.group(3) + ".min.js";
+            matcher.appendReplacement(result, matcher.group(1) + replacementPath + matcher.group(4));
+        }
+        matcher.appendTail(result);
+
+        return result.toString();
+    }
+
+    // Example usage
+    public static void main(String[] args) {
+        String html = "<html><head>\n" +
+                     "<script src=\"ir_js/lib/main.js\"></script>\n" +
+                     "<script src='ir_js/minifiedJs/lib/jquery.min.js'></script>\n" +
+                     "</head></html>";
+        
+        System.out.println(replaceUnminifiedJsPaths(html));
+    }
+}
