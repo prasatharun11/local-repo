@@ -1,0 +1,60 @@
+task obfuscateJs {
+    description = 'jQuery-compatible JS obfuscation with UTF-8 encoding'
+    group = 'build'
+    outputs.dir jsMinDir
+
+    doFirst {
+        jsMinDir.mkdirs()
+        
+        // Download jQuery externs file if not present
+        def jQueryExterns = new File("${project.buildDir}/jquery-externs.js")
+        if (!jQueryExterns.exists()) {
+            new URL('https://cdn.jsdelivr.net/npm/jquery@3.6.0/externs/jquery-3.6-externs.js')
+                .withInputStream { i -> jQueryExterns.withOutputStream { it << i } }
+        }
+    }
+
+    doLast {
+        fileTree(jsSrcDir).matching {
+            include '**/*.js'
+            exclude '**/minifiedJs/**'
+            exclude '**/*.min.js'
+        }.each { jsFile ->
+            def relativePath = jsSrcDir.toPath().relativize(jsFile.toPath())
+            def obfuscatedFile = new File(jsMinDir, relativePath.toString().replace('.js', '.obf.js'))
+            obfuscatedFile.parentFile.mkdirs()
+
+            javaexec {
+                classpath = configurations.runtimeClasspath
+                mainClass = 'com.google.javascript.jscomp.CommandLineRunner'
+                args = [
+                    '--js', jsFile.absolutePath,
+                    '--js_output_file', obfuscatedFile.absolutePath,
+                    '--compilation_level', 'ADVANCED_OPTIMIZATIONS', // For maximum obfuscation
+                    '--charset', 'UTF-8',
+                    '--warning_level', 'QUIET',
+                    '--language_in', 'ECMASCRIPT_NEXT',
+                    '--language_out', 'ECMASCRIPT5',
+                    
+                    // jQuery-specific protections
+                    '--externs', "${project.buildDir}/jquery-externs.js",
+                    '--rename_variable_prefix', 'jq_',
+                    '--preserve_type_annotations',
+                    '--generate_exports',
+                    
+                    // Obfuscation enhancements
+                    '--use_types_for_optimization',
+                    '--assume_function_wrapper',
+                    '--isolate_polyfills',
+                    '--variable_renaming', 'ALL',
+                    '--property_renaming', 'ALL',
+                    '--ambiguate_properties',
+                    '--disambiguate_properties'
+                ]
+                jvmArgs = ['-Xms256m', '-Xmx1024m'] // More memory for better optimization
+            }
+
+            println "Obfuscated ${jsFile.name} → ${obfuscatedFile.name}"
+        }
+    }
+}
