@@ -1,0 +1,53 @@
+import java.util.regex.*;
+
+public class JsPathReplacer {
+    
+    public static String replaceUnminifiedJsPaths(String htmlContent) {
+        if (htmlContent == null || htmlContent.isEmpty()) {
+            return htmlContent;
+        }
+
+        // Updated pattern to handle:
+        // 1. src=".../ir_js/..." paths
+        // 2. Both single and double quotes
+        // 3. Avoid already minified paths
+        Pattern pattern = Pattern.compile(
+            "(src=[\"'])(.*?)(ir_js/(?!minifiedJs/)(.*?)\\.js([\"'])", 
+            Pattern.CASE_INSENSITIVE
+        );
+        
+        Matcher matcher = pattern.matcher(htmlContent);
+        StringBuffer result = new StringBuffer();
+
+        while (matcher.find()) {
+            // Skip if this is already a minified path
+            if (matcher.group(0).contains(".min.js")) {
+                continue;
+            }
+            
+            // Reconstruct the path with minified version
+            String replacement = matcher.group(1) +                   // src="
+                               matcher.group(2) +                    // web/ or other prefix
+                               "ir_js/minifiedJs/" +                 // new path segment
+                               matcher.group(4) +                    // original subpath
+                               ".min.js" +                           // minified suffix
+                               matcher.group(5);                     // closing quote
+            
+            matcher.appendReplacement(result, replacement);
+        }
+        matcher.appendTail(result);
+
+        return result.toString();
+    }
+
+    // Test cases
+    public static void main(String[] args) {
+        String testHtml = "<html><head>\n" +
+                        "<script src=\"web/ir_js/lib/main.js\"></script>\n" +
+                        "<script src='assets/ir_js/utils.js'></script>\n" +
+                        "<script src=\"ir_js/minifiedJs/processed.min.js\"></script>\n" +
+                        "</head></html>";
+        
+        System.out.println(replaceUnminifiedJsPaths(testHtml));
+    }
+}
