@@ -1,0 +1,27 @@
+import com.google.javascript.jscomp.*
+
+task minifyJs {
+    doLast {
+        def jsDir = file("src/main/webapp/js")
+        def outputDir = file("$buildDir/minifiedJs")
+        outputDir.mkdirs()
+
+        jsDir.eachFileMatch(~/.*\.js/) { File inputFile ->
+            def options = new CompilerOptions()
+            CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(options)
+
+            def compiler = new Compiler()
+            def externs = AbstractCommandLineRunner.getDefaultExterns()
+            def input = SourceFile.fromFile(inputFile)
+
+            def result = compiler.compile(externs, [input], options)
+
+            if (result.success) {
+                def outFile = new File(outputDir, inputFile.name.replace(".js", ".min.js"))
+                outFile.text = compiler.toSource()
+            } else {
+                throw new GradleException("JS Minification failed for ${inputFile.name}")
+            }
+        }
+    }
+}
