@@ -1,0 +1,25 @@
+/**
+ * @externs
+ * @suppress {duplicate,checkTypes}
+ */
+
+// Core jQuery
+var jQuery = function(selector, context) {};
+var $ = jQuery;
+
+// Common Methods (add more if needed)
+jQuery.prototype.ready = function(fn) {};
+jQuery.prototype.on = function(events, handler) {};
+jQuery.prototype.off = function(events, handler) {};
+jQuery.prototype.ajax = function(options) {};
+jQuery.prototype.css = function(prop, value) {};
+jQuery.prototype.each = function(callback) {};
+jQuery.prototype.hide = function() {};
+jQuery.prototype.show = function() {};
+jQuery.prototype.val = function() {};
+
+// Static Methods
+jQuery.ajax = function(options) {};
+jQuery.get = function(url, success) {};
+jQuery.post = function(url, data, success) {};
+jQuery.extend = function(target, object) {};
