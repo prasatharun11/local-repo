@@ -1,0 +1,42 @@
+task minifyJs {
+    description = 'Minifies JS files with UTF-8 encoding (parallel execution)'
+    group = 'build'
+    outputs.dir jsMinDir
+
+    doFirst {
+        jsMinDir.mkdirs()
+    }
+
+    doLast {
+        def jsFiles = fileTree(jsSrcDir).matching {
+            include '**/*.js'
+            exclude '**/minifiedJs/**'
+            exclude '**/*.min.js'
+        }.files
+
+        def classpathString = configurations.runtimeClasspath.asPath
+
+        jsFiles.parallelStream().forEach { jsFile ->
+            def relativePath = jsSrcDir.toPath().relativize(jsFile.toPath())
+            def minifiedFile = new File(jsMinDir, relativePath.toString().replace('.js', '.min.js'))
+            minifiedFile.parentFile.mkdirs()
+
+            project.exec {
+                commandLine = [
+                    'java',
+                    '-cp', classpathString,
+                    'com.google.javascript.jscomp.CommandLineRunner',
+                    '--js', jsFile.absolutePath,
+                    '--js_output_file', minifiedFile.absolutePath,
+                    '--compilation_level', 'SIMPLE_OPTIMIZATIONS',
+                    '--charset', 'UTF-8',
+                    '--warning_level', 'QUIET',
+                    '--language_in', 'ECMASCRIPT_NEXT',
+                    '--language_out', 'ECMASCRIPT5'
+                ]
+            }
+
+            println "Minified ${jsFile.name} → ${minifiedFile.name} (UTF-8)"
+        }
+    }
+}
