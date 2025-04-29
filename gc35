@@ -1,0 +1,49 @@
+task obfuscateJs {
+    doFirst {
+        // Verify externs file exists
+        def externsFile = file('ir_tpa/externs.js')
+        if (!externsFile.exists()) {
+            throw new GradleException("jQuery externs file not found at: ${externsFile.absolutePath}")
+        }
+        
+        // Verify it contains jQuery declarations
+        if (!externsFile.text.contains('jQuery = function') || !externsFile.text.contains('$ = jQuery')) {
+            throw new GradleException("Externs file doesn't appear to contain proper jQuery declarations")
+        }
+        
+        jsMinDir.mkdirs()
+    }
+
+    doLast {
+        fileTree(jsSrcDir).matching {
+            include '**/*.js'
+            exclude '**/*.min.js'
+        }.each { jsFile ->
+            def outputFile = new File(jsMinDir, jsFile.name.replace('.js', '.obf.js'))
+            
+            try {
+                javaexec {
+                    classpath = configurations.runtimeClasspath
+                    mainClass = 'com.google.javascript.jscomp.CommandLineRunner'
+                    args = [
+                        '--js', jsFile.absolutePath,
+                        '--js_output_file', outputFile.absolutePath,
+                        '--compilation_level', 'ADVANCED_OPTIMIZATIONS',
+                        '--externs', file('ir_tpa/externs.js').absolutePath,
+                        '--charset', 'UTF-8',
+                        '--warning_level', 'QUIET',
+                        '--language_in', 'ECMASCRIPT_NEXT',
+                        '--language_out', 'ECMASCRIPT5',
+                        '--assume_function_wrapper',
+                        '--rename_variable_prefix', 'jq_'
+                    ]
+                    jvmArgs = ['-Xmx1024m'] // Ensure enough memory
+                }
+                println "Successfully obfuscated: ${jsFile.name}"
+            } catch (Exception e) {
+                logger.error("Failed to obfuscate ${jsFile.name}: ${e.message}")
+                throw e
+            }
+        }
+    }
+}
