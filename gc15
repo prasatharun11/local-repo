@@ -1,0 +1,65 @@
+plugins {
+    id 'java'
+    id 'war'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.google.javascript:closure-compiler:v20240428' // Use the latest version
+    providedCompile 'javax.servlet:javax.servlet-api:4.0.1' // Or your servlet API version
+}
+
+task minifyJs(type: JavaExec) {
+    description = 'Minifies JavaScript files using Google Closure Compiler'
+    group = 'build'
+
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set('com.google.javascript.jscomp.CommandLineRunner')
+
+    def jsSrcDir = file('src/main/webapp/ir_js') // Your JavaScript source directory
+    def jsMinDir = file('src/main/webapp/ir_js/minifiedJs') // Output directory for minified files
+
+    outputs.dir jsMinDir
+
+    // Ensure the output directory exists
+    doFirst {
+        jsMinDir.mkdirs()
+    }
+
+    doLast {
+        jsSrcDir.listFiles({ File file -> file.name.endsWith('.js') } as FileFilter).each { jsFile ->
+            // Skip files in the minifiedJs directory to avoid processing them again
+            if (!jsFile.getAbsolutePath().contains(jsMinDir.getName())) {
+                def relativePath = jsFile.toRelativeString(jsSrcDir)
+                def baseName = jsFile.name.substring(0, jsFile.name.lastIndexOf('.'))
+                def minifiedFile = new File(jsMinDir, "${baseName}.min.js")
+                def sourceMapFile = new File(jsMinDir, "${baseName}.min.js.map")
+
+                javaexec {
+                    classpath = sourceSets.main.runtimeClasspath
+                    mainClass.set('com.google.javascript.jscomp.CommandLineRunner')
+                    args = [
+                            '--js', jsFile.getAbsolutePath(),
+                            '--js_output_file', minifiedFile.getAbsolutePath(),
+                            '--compilation_level', task.minifyJs.args.find { it.startsWith('--compilation_level') }?.split(' ')[1] ?: 'SIMPLE_OPTIMIZATIONS',
+                            '--create_source_map', sourceMapFile.getAbsolutePath(),
+                            '--source_map_format', task.minifyJs.args.find { it.startsWith('--source_map_format') }?.split(' ')[1] ?: 'V3',
+                            '--output_wrapper', task.minifyJs.args.find { it.startsWith('--output_wrapper') }?.split(' ')[1] ?: ''
+                    ].findAll()
+                }
+            }
+        }
+    }
+}
+
+war.dependsOn minifyJs
+
+// No need to explicitly configure the war task to include them now,
+// as they are under src/main/webapp.
+
+clean.doLast {
+    delete 'src/main/webapp/ir_js/minifiedJs'
+}
