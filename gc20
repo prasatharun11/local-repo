@@ -1,0 +1,27 @@
+// Declare a custom configuration first
+configurations {
+    closureCompiler
+}
+
+// Add the dependency to that named configuration
+dependencies {
+    closureCompiler 'com.google.javascript:closure-compiler:v20240317'
+}
+
+task minifyJs(type: JavaExec) {
+    def inputDir = file("src/main/webapp/js")
+    def outputDir = file("$buildDir/minifiedJs")
+    outputDir.mkdirs()
+
+    classpath = configurations.closureCompiler
+    mainClass = 'com.google.javascript.jscomp.CommandLineRunner'
+
+    args = inputDir.listFiles()
+        .findAll { it.name.endsWith(".js") }
+        .collectMany { file ->
+            [
+                "--js", file.absolutePath,
+                "--js_output_file", new File(outputDir, file.name.replace(".js", ".min.js")).absolutePath
+            ]
+        }
+}
