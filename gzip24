@@ -1,0 +1,38 @@
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    // Intercept GET requests with query params
+    if (settings.type === 'GET' && (!settings.data || typeof settings.data !== 'string')) {
+      // Extract query parameters from URL
+      let url = new URL(settings.url, window.location.origin);
+      let params = Object.fromEntries(url.searchParams.entries());
+
+      if (Object.keys(params).length > 0) {
+        // Inject as data so existing gzip logic works
+        settings.data = params;
+
+        // Remove query params from the URL
+        settings.url = url.origin + url.pathname;
+      }
+    }
+
+    // Your existing logic: gzip + base64 the settings.data
+    if (typeof settings.data === 'object') {
+      let jsonString = JSON.stringify(settings.data);
+      let compressedData = pako.gzip(jsonString, { to: 'string' });
+      let base64Data = btoa(String.fromCharCode(...compressedData));
+      settings.data = base64Data;
+
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  },
+
+  dataFilter: function (data, type) {
+    if (data && data.indexOf('sessionExpired.jsp') !== -1) {
+      window.location.href = '/web/public/noauth/session.html';
+    } else {
+      return data;
+    }
+  }
+});
