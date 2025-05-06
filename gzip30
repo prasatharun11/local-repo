@@ -1,0 +1,82 @@
+function parseQueryStringPreserveDuplicates(queryString) {
+  const params = new URLSearchParams(queryString);
+  const obj = {};
+
+  for (const key of params.keys()) {
+    const values = params.getAll(key);
+    obj[key] = values.length > 1 ? values : values[0];
+  }
+
+  return obj;
+}
+
+function buildQueryStringWithDuplicates(obj) {
+  const params = new URLSearchParams();
+  for (const key in obj) {
+    const value = obj[key];
+    if (Array.isArray(value)) {
+      value.forEach(val => params.append(key, val));
+    } else {
+      params.append(key, value);
+    }
+  }
+  return params.toString();
+}
+
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    const method = settings.type.toUpperCase();
+    const url = new URL(settings.url, window.location.origin);
+
+    // Step 1: Parse query parameters (preserve duplicate keys)
+    const queryParams = parseQueryStringPreserveDuplicates(url.search.slice(1));
+
+    // Step 2: Parse body data if present
+    let bodyParams = {};
+    if (settings.data) {
+      if (typeof settings.data === 'string') {
+        bodyParams = parseQueryStringPreserveDuplicates(settings.data);
+      } else if (typeof settings.data === 'object') {
+        bodyParams = settings.data;
+      }
+    }
+
+    // Step 3: Merge query and body parameters
+    const mergedParams = { ...queryParams };
+
+    for (const key in bodyParams) {
+      if (mergedParams.hasOwnProperty(key)) {
+        const mergedVal = Array.isArray(mergedParams[key]) ? mergedParams[key] : [mergedParams[key]];
+        const bodyVal = Array.isArray(bodyParams[key]) ? bodyParams[key] : [bodyParams[key]];
+        mergedParams[key] = mergedVal.concat(bodyVal);
+      } else {
+        mergedParams[key] = bodyParams[key];
+      }
+    }
+
+    // Step 4: Compress and encode merged params
+    if (Object.keys(mergedParams).length > 0) {
+      const jsonString = JSON.stringify(mergedParams);
+      const compressedData = pako.gzip(jsonString, { to: 'string' });
+      const base64Data = btoa(String.fromCharCode(...compressedData));
+
+      settings.data = base64Data;
+
+      // Remove query string from URL
+      settings.url = url.origin + url.pathname;
+
+      // Set headers
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  },
+
+  dataFilter: function (data, type) {
+    if (data && data.indexOf('sessionExpired.jsp') !== -1) {
+      window.location.href = '/web/public/noauth/session.html';
+    } else {
+      return data;
+    }
+  }
+});
