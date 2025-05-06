@@ -1,0 +1,22 @@
+function parseQueryString(str) {
+  const obj = {};
+  const pairs = str.split('&');
+  for (const pair of pairs) {
+    if (!pair) continue;
+    const [rawKey, rawValue] = pair.split('=');
+    const key = decodeURIComponent(rawKey);
+    const value = decodeURIComponent(rawValue || '');
+
+    if (obj.hasOwnProperty(key)) {
+      // Always store multiple values as array without altering key
+      if (Array.isArray(obj[key])) {
+        obj[key].push(value);
+      } else {
+        obj[key] = [obj[key], value];
+      }
+    } else {
+      obj[key] = value;
+    }
+  }
+  return obj;
+}
