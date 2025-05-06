@@ -1,0 +1,69 @@
+function extractKeyValuePairs(queryString) {
+  const pairs = [];
+
+  if (!queryString) return pairs;
+
+  const segments = queryString.split('&');
+
+  for (const segment of segments) {
+    if (!segment) continue;
+    const [rawKey, rawVal] = segment.split('=');
+    const key = decodeURIComponent(rawKey || '');
+    const val = decodeURIComponent(rawVal || '');
+    pairs.push([key, val]);
+  }
+
+  return pairs;
+}
+
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    const method = settings.type.toUpperCase();
+    const url = new URL(settings.url, window.location.origin);
+
+    // Extract query string pairs (duplicates preserved)
+    const queryPairs = extractKeyValuePairs(url.search.slice(1));
+
+    // Extract body data pairs (duplicates preserved)
+    let bodyPairs = [];
+    if (settings.data) {
+      if (typeof settings.data === 'string') {
+        bodyPairs = extractKeyValuePairs(settings.data);
+      } else if (typeof settings.data === 'object') {
+        for (const key in settings.data) {
+          const val = settings.data[key];
+          if (Array.isArray(val)) {
+            val.forEach(v => bodyPairs.push([key, v]));
+          } else {
+            bodyPairs.push([key, val]);
+          }
+        }
+      }
+    }
+
+    const finalPairs = [...queryPairs, ...bodyPairs];
+
+    if (finalPairs.length > 0) {
+      const jsonString = JSON.stringify(finalPairs);
+      const compressed = pako.gzip(jsonString, { to: 'string' });
+      const base64 = btoa(String.fromCharCode(...compressed));
+
+      settings.data = base64;
+
+      // Remove query params from URL
+      settings.url = url.origin + url.pathname;
+
+      // Set gzip headers
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  },
+
+  dataFilter: function (data, type) {
+    if (data && data.includes('sessionExpired.jsp')) {
+      window.location.href = '/web/public/noauth/session.html';
+    }
+    return data;
+  }
+});
