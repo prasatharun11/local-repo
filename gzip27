@@ -1,0 +1,51 @@
+function parseQueryString(str) {
+  const obj = {};
+  const pairs = str.split('&');
+  for (const pair of pairs) {
+    if (!pair) continue;
+    const [rawKey, rawValue] = pair.split('=');
+    const key = decodeURIComponent(rawKey);
+    const value = decodeURIComponent(rawValue || '');
+    if (obj.hasOwnProperty(key)) {
+      if (Array.isArray(obj[key])) {
+        obj[key].push(value);
+      } else {
+        obj[key] = [obj[key], value];
+      }
+    } else {
+      obj[key] = value;
+    }
+  }
+  return obj;
+}
+
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    const method = settings.type.toUpperCase();
+    const url = new URL(settings.url, window.location.origin);
+    const queryParams = parseQueryString(url.search.slice(1));  // skip '?'
+
+    let bodyParams = {};
+    if (settings.data) {
+      if (typeof settings.data === 'string') {
+        bodyParams = parseQueryString(settings.data);
+      } else if (typeof settings.data === 'object') {
+        bodyParams = settings.data;
+      }
+    }
+
+    const mergedParams = { ...queryParams, ...bodyParams };
+
+    if (Object.keys(mergedParams).length > 0) {
+      const jsonString = JSON.stringify(mergedParams);
+      const compressedData = pako.gzip(jsonString, { to: 'string' });
+      const base64Data = btoa(String.fromCharCode(...compressedData));
+      settings.data = base64Data;
+      settings.url = url.origin + url.pathname;
+
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  }
+});
