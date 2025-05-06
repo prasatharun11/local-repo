@@ -1,0 +1,43 @@
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    if (settings.type === 'GET') {
+      // Parse query params from the URL
+      let url = new URL(settings.url, window.location.origin);
+      let params = Object.fromEntries(url.searchParams.entries());
+
+      if (Object.keys(params).length > 0) {
+        // Encode params as gzip + base64
+        let jsonString = JSON.stringify(params);
+        let compressedData = pako.gzip(jsonString, { to: 'string' });
+        let base64Data = btoa(String.fromCharCode(...compressedData));
+        let encodedPayload = encodeURIComponent(base64Data);
+
+        // Update URL to use single `payload` param
+        url.search = '?payload=' + encodedPayload;
+        settings.url = url.toString();
+
+        jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+        jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+        jqXHR.setRequestHeader('Content-Type', 'application/json');
+      }
+    } else if (typeof settings.data === 'string') {
+      // Compress and encode POST data (stringified)
+      let jsonString = JSON.stringify(settings.data);
+      let compressedData = pako.gzip(jsonString, { to: 'string' });
+      let base64Data = btoa(String.fromCharCode(...compressedData));
+      settings.data = base64Data;
+
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  },
+
+  dataFilter: function (data, type) {
+    if (data && data.indexOf('sessionExpired.jsp') !== -1) {
+      window.location.href = '/web/public/noauth/session.html';
+    } else {
+      return data;
+    }
+  }
+});
