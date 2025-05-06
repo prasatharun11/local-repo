@@ -1,0 +1,48 @@
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    let method = settings.type.toUpperCase();
+
+    // Step 1: Extract query parameters from the URL
+    let url = new URL(settings.url, window.location.origin);
+    let queryParams = Object.fromEntries(url.searchParams.entries());
+
+    // Step 2: Get existing data (usually used in POST)
+    let bodyParams = {};
+    if (settings.data) {
+      if (typeof settings.data === 'string') {
+        bodyParams = JSON.parse(settings.data);
+      } else if (typeof settings.data === 'object') {
+        bodyParams = settings.data;
+      }
+    }
+
+    // Step 3: Merge both query and body parameters
+    let mergedParams = { ...queryParams, ...bodyParams };
+
+    // Step 4: Compress and encode if there are any params
+    if (Object.keys(mergedParams).length > 0) {
+      let jsonString = JSON.stringify(mergedParams);
+      let compressedData = pako.gzip(jsonString, { to: 'string' });
+      let base64Data = btoa(String.fromCharCode(...compressedData));
+
+      // Assign encoded data
+      settings.data = base64Data;
+
+      // Clear URL query string
+      settings.url = url.origin + url.pathname;
+
+      // Set headers
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  },
+
+  dataFilter: function (data, type) {
+    if (data && data.indexOf('sessionExpired.jsp') !== -1) {
+      window.location.href = '/web/public/noauth/session.html';
+    } else {
+      return data;
+    }
+  }
+});
