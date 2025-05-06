@@ -1,0 +1,96 @@
+function parseQueryString(str) {
+  const obj = {};
+  const pairs = str.split('&');
+
+  for (const pair of pairs) {
+    if (!pair) continue;
+    const [rawKey, rawValue] = pair.split('=');
+    const key = decodeURIComponent(rawKey || '');
+    const value = decodeURIComponent(rawValue || '');
+
+    if (obj.hasOwnProperty(key)) {
+      if (Array.isArray(obj[key])) {
+        obj[key].push(value);
+      } else {
+        obj[key] = [obj[key], value];
+      }
+    } else {
+      obj[key] = value;
+    }
+  }
+
+  return obj;
+}
+
+function buildQueryString(obj) {
+  const params = [];
+
+  for (const key in obj) {
+    const val = obj[key];
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        params.push(encodeURIComponent(key) + '=' + encodeURIComponent(item));
+      }
+    } else {
+      params.push(encodeURIComponent(key) + '=' + encodeURIComponent(val));
+    }
+  }
+
+  return params.join('&');
+}
+
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    const url = new URL(settings.url, window.location.origin);
+
+    // Step 1: Parse query params into object (preserve duplicates as arrays)
+    const queryParams = parseQueryString(url.search.slice(1));
+
+    // Step 2: Parse settings.data into object (handle string or object)
+    let bodyParams = {};
+    if (settings.data) {
+      if (typeof settings.data === 'string') {
+        bodyParams = parseQueryString(settings.data);
+      } else if (typeof settings.data === 'object') {
+        bodyParams = settings.data;
+      }
+    }
+
+    // Step 3: Merge params (preserve duplicates)
+    const mergedParams = { ...queryParams };
+    for (const key in bodyParams) {
+      if (mergedParams.hasOwnProperty(key)) {
+        const a = Array.isArray(mergedParams[key]) ? mergedParams[key] : [mergedParams[key]];
+        const b = Array.isArray(bodyParams[key]) ? bodyParams[key] : [bodyParams[key]];
+        mergedParams[key] = [...a, ...b];
+      } else {
+        mergedParams[key] = bodyParams[key];
+      }
+    }
+
+    // Step 4: Convert mergedParams to string with duplicate keys preserved
+    const finalParamString = buildQueryString(mergedParams);
+
+    // Step 5: Compress and encode
+    if (finalParamString) {
+      const compressed = pako.gzip(finalParamString, { to: 'string' });
+      const base64 = btoa(String.fromCharCode(...compressed));
+      settings.data = base64;
+
+      // Remove query params from URL
+      settings.url = url.origin + url.pathname;
+
+      // Set headers
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  },
+
+  dataFilter: function (data, type) {
+    if (data && data.includes('sessionExpired.jsp')) {
+      window.location.href = '/web/public/noauth/session.html';
+    }
+    return data;
+  }
+});
