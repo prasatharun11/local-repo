@@ -1,0 +1,38 @@
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    let method = settings.type.toUpperCase();
+
+    // Step 1: Extract query params from the URL
+    let url = new URL(settings.url, window.location.origin);
+    let queryParams = Object.fromEntries(url.searchParams.entries());
+
+    // Step 2: Handle both string and object data safely
+    let bodyParams = {};
+    if (settings.data) {
+      if (typeof settings.data === 'string') {
+        bodyParams = Object.fromEntries(new URLSearchParams(settings.data));
+      } else if (typeof settings.data === 'object') {
+        bodyParams = settings.data;
+      }
+    }
+
+    // Step 3: Merge
+    let mergedParams = { ...queryParams, ...bodyParams };
+
+    // Step 4: If we have any params, encode
+    if (Object.keys(mergedParams).length > 0) {
+      let jsonString = JSON.stringify(mergedParams);
+      let compressedData = pako.gzip(jsonString, { to: 'string' });
+      let base64Data = btoa(String.fromCharCode(...compressedData));
+      settings.data = base64Data;
+
+      // Remove original query string from URL
+      settings.url = url.origin + url.pathname;
+
+      // Set headers
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  }
+});
