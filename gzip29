@@ -1,0 +1,59 @@
+function parseWithURLSearchParams(queryString) {
+  const params = new URLSearchParams(queryString);
+  const obj = {};
+
+  for (const key of params.keys()) {
+    const values = params.getAll(key);
+    obj[key] = values.length > 1 ? values : values[0];
+  }
+
+  return obj;
+}
+
+$.ajaxSetup({
+  beforeSend: function (jqXHR, settings) {
+    const method = settings.type.toUpperCase();
+    const url = new URL(settings.url, window.location.origin);
+
+    // 1. Parse URL query params (preserving duplicates)
+    const queryParams = parseWithURLSearchParams(url.search.slice(1)); // remove "?"
+
+    // 2. Parse settings.data (which could be a string or object)
+    let bodyParams = {};
+    if (settings.data) {
+      if (typeof settings.data === 'string') {
+        bodyParams = parseWithURLSearchParams(settings.data);
+      } else if (typeof settings.data === 'object') {
+        bodyParams = settings.data;
+      }
+    }
+
+    // 3. Merge both sources
+    const mergedParams = { ...queryParams, ...bodyParams };
+
+    // 4. Encode only if there's data
+    if (Object.keys(mergedParams).length > 0) {
+      const jsonString = JSON.stringify(mergedParams);
+      const compressedData = pako.gzip(jsonString, { to: 'string' });
+      const base64Data = btoa(String.fromCharCode(...compressedData));
+
+      settings.data = base64Data;
+
+      // Strip query string from URL
+      settings.url = url.origin + url.pathname;
+
+      // Set headers
+      jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+      jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+      jqXHR.setRequestHeader('Content-Type', 'application/json');
+    }
+  },
+
+  dataFilter: function (data, type) {
+    if (data && data.indexOf('sessionExpired.jsp') !== -1) {
+      window.location.href = '/web/public/noauth/session.html';
+    } else {
+      return data;
+    }
+  }
+});
