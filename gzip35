@@ -1,0 +1,50 @@
+${function() {
+    $.ajaxSetup({
+        beforeSend: function(jqXHR, settings) {
+            let url = new URL(settings.url, window.location.origin);
+            let queryParams = Object.fromEntries(url.searchParams.entries());
+            let bodyParams = {};
+            
+            if (settings.data) {
+                if (typeof settings.data === 'string') {
+                    // Handle duplicate keys in URL-encoded string
+                    const params = new URLSearchParams(settings.data);
+                    const seenKeys = new Set();
+                    
+                    for (const [key, value] of params.entries()) {
+                        if (bodyParams.hasOwnProperty(key)) {
+                            // If key already exists, convert to array or push to existing array
+                            if (!Array.isArray(bodyParams[key])) {
+                                bodyParams[key] = [bodyParams[key]];
+                            }
+                            bodyParams[key].push(value);
+                        } else {
+                            bodyParams[key] = value;
+                        }
+                    }
+                } else if (typeof settings.data === 'object' && !Array.isArray(settings.data)) {
+                    // Handle duplicate keys in object (though JS objects can't have duplicate keys)
+                    // This handles the case where the object might have array values
+                    bodyParams = settings.data;
+                }
+            }
+            
+            let mergedParams = { ...bodyParams, ...queryParams };
+            
+            if (Object.keys(mergedParams).length > 0) {
+                let jsonString = JSON.stringify(mergedParams);
+                let compressedData = pako.gzip(jsonString, { to: 'string' });
+                let base64Data = btoa(String.fromCharCode(...compressedData));
+                settings.data = base64Data;
+                
+                if (settings.type !== 'GET') {
+                    settings.url = url.origin + url.pathname;
+                }
+                
+                jqXHR.setRequestHeader('Content-Encoding', 'gzip');
+                jqXHR.setRequestHeader('Content-Transfer-Encoding', 'base64');
+                jqXHR.setRequestHeader('Content-Type', 'application/json');
+            }
+        }
+    });
+}}
