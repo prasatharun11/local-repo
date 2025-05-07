@@ -1,0 +1,22 @@
+private Map<String, String[]> combinedParameters;
+
+private void mergeParameters(HttpServletRequest request) {
+    combinedParameters = new HashMap<>();
+
+    if (jsonBody != null) {
+        for (String key : jsonBody.keySet()) {
+            Object value = jsonBody.get(key);
+            if (value instanceof List) {
+                List<?> list = (List<?>) value;
+                String[] array = list.stream()
+                        .map(Object::toString)
+                        .toArray(String[]::new);
+                combinedParameters.put(key, array);
+            } else {
+                combinedParameters.put(key, new String[] { value.toString() });
+            }
+        }
+    }
+
+    request.getParameterMap().forEach(combinedParameters::put);
+}
