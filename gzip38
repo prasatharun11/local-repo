@@ -1,0 +1,10 @@
+if (value instanceof JSONArray) {
+    JSONArray array = (JSONArray) value;
+    String[] stringArray = new String[array.length()];
+    for (int i = 0; i < array.length(); i++) {
+        stringArray[i] = array.get(i).toString();
+    }
+    combinedParameters.put(key, stringArray);
+} else {
+    combinedParameters.put(key, new String[] { value.toString() });
+}
