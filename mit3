@@ -1,0 +1,38 @@
+Here are the Veracode mitigation comments for the highlighted lines in your code snippet:
+
+
+---
+
+Line 315
+
+Code:
+
+fileName = Encoder.forJava(Utilities.removeLFAndCR(fileName));
+
+CWE-201: Information Exposure Through Sent Data
+CWE-209: Information Exposure Through an Error Message
+
+Mitigation Comment:
+
+Mitigated: The `fileName` value is sanitized using `Utilities.removeLFAndCR()` to eliminate CRLF injection risk, and then safely encoded using `OWASP Encoder.forJava()`, preventing exposure of sensitive or malicious input. This ensures the filename cannot be used to manipulate headers or expose internal application details. There is no untrusted data leaked through error messages as no stack traces or exception contents are exposed to the end user.
+
+
+---
+
+Line 320
+
+Code:
+
+bos.write(b);
+
+CWE-201: Information Exposure Through Sent Data
+
+Mitigation Comment:
+
+Mitigated: The byte array `b` is validated to ensure it is not null or empty before writing to the response. The data sent through `bos.write(b)` is controlled and does not include any dynamic or sensitive internal information. Error conditions are logged securely via `Logger.fatal` without exposing any stack traces or system internals to the user.
+
+
+---
+
+Let me know if you'd like one combined summary for submission in a report or security tool.
+
