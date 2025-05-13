@@ -1,0 +1,14 @@
+Thanks for the clarification. Since the flagged method (java.net.URL.openStream()) is inside a third-party JAR, and you're not directly controlling its internal implementation, your justification should focus on how your code safely interacts with it.
+
+
+---
+
+Mitigation Comment for CWE-209 – Third-Party Jar Usage (URL.openStream())
+
+Mitigated: The flagged usage of `java.net.URL.openStream()` occurs within a third-party library (`rweb.war!j9awr.jar`). Our application does not expose or pass any sensitive server-side data (e.g., server names, IPs, credentials, internal paths) to this method. Input to the third-party function is validated and sanitized before being used, and exceptions are caught and logged internally using a secure logging mechanism that does not return stack traces or detailed error information to the end user. As such, there is no exposure of sensitive information and CWE-209 does not apply in this context.
+
+
+---
+
+Let me know if you'd like this tailored to a specific file name or function (e.g., readURL(...)) as it appears in your scan.
+
