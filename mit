@@ -1,0 +1,5 @@
+This finding was reviewed and mitigated. No stack trace, exception messages, or sensitive internal data are passed into the email subject or body. Although user input (e.g., username) may be included in the email content, it is sanitized using OWASP Java Encoder (Encode.forHtml) before being set on the message. All potentially untrusted inputs are properly encoded to prevent any exposure of system details or injection risks. The `Transport.send()` call only transmits non-sensitive, encoded information.
+
+Additionally, no exception details (e.g., Throwable.toString, getMessage) are ever included in the email body or subject. Full exception logs, if needed, are retained securely in server-side logs, not shared via email.
+
+Therefore, this does not expose internal error messages or untrusted content in a way that violates CWE-209 or CWE-201. We request marking this finding as Mitigated.
