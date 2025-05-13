@@ -1,0 +1,5 @@
+This finding was reviewed and is not exposing sensitive information. The value written to the HTTP response (`msg`) is sanitized using `JsonSanitizer.sanitize(msg)` for JSON content and `OWASP Encoder.encodeForJava(msg)` for plain text. These libraries ensure that any untrusted characters are neutralized, avoiding accidental leakage of system details or structure.
+
+Additionally, exceptions are not included in the HTTP response. Any caught exceptions are handled securely via `Logger.fatal(...)`, and no stack traces or sensitive error messages are returned to the client.
+
+As there is no exposure of internal application logic, configuration, or exception data in the response, this CWE-209 finding should be considered mitigated.
