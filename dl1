@@ -1,0 +1,142 @@
+const dlEvent = {
+  loginAttempt(userID, userType, userRole, loginStatus) {
+    adobeDataLayer.push({
+      event: "loginAttempt",
+      user: { userID, userType, userRole, loginStatus }
+    });
+  },
+
+  loginSuccess(userID, userType, userRole, loginStatus) {
+    adobeDataLayer.push({
+      event: "loginSuccess",
+      user: { userID, userType, userRole, loginStatus }
+    });
+  },
+
+  loginFail(userID, userType, userRole, loginStatus, errorType, errorMessage, errorCode) {
+    adobeDataLayer.push({
+      event: "loginFail",
+      user: { userID, userType, userRole, loginStatus },
+      error: { errorType, errorMessage, errorCode }
+    });
+  },
+
+  siteSearch(searchType, searchKeyword, searchResultCount) {
+    adobeDataLayer.push({
+      event: "siteSearch",
+      search: { searchType, searchKeyword, searchResultCount }
+    });
+  },
+
+  docDownload(docType, docName, docSize) {
+    adobeDataLayer.push({
+      event: "docDownload",
+      document: { docType, docName, docSize }
+    });
+  },
+
+  docEmail(docType, docName, docSize) {
+    adobeDataLayer.push({
+      event: "docEmail",
+      document: { docType, docName, docSize }
+    });
+  },
+
+  videoPlay(videoName, videoViewTime, videoDuration, videoPercentComplete) {
+    adobeDataLayer.push({
+      event: "videoPlay",
+      videoName,
+      videoViewTime,
+      videoDuration,
+      videoPercentComplete
+    });
+  },
+
+  pageView(siteInfo, pageInfo, userInfo) {
+    adobeDataLayer.push({
+      event: "pageView",
+      site: siteInfo,
+      page: pageInfo,
+      user: userInfo
+    });
+  },
+
+  clickTracking(ctaName, ctaType, ctaPosition) {
+    adobeDataLayer.push({
+      event: "clickTracking",
+      cta: { ctaName, ctaType, ctaPosition }
+    });
+  }
+};
+
+// Common sample parameter values
+const userID = "u123";
+const userType = "external";
+const userRole = "admin";
+const loginStatus = "authenticated";
+
+const errorType = "server error";
+const errorMessage = "page not found";
+const errorCode = "404";
+
+const searchType = "keyword";
+const searchKeyword = "insurance";
+const searchResultCount = "25";
+
+const docType = "PDF";
+const docName = "Policy Document";
+const docSize = "2MB";
+
+const videoName = "Intro Video";
+const videoViewTime = "60 seconds";
+const videoDuration = "300 seconds";
+const videoPercentComplete = "20";
+
+const siteInfo = {
+  code: "irisk",
+  country: "us",
+  language: "en",
+  platform: "web",
+  environment: "uat",
+  currency: "USD",
+  clientNumber: "12345",
+  clientName: "Acme Corp"
+};
+
+const pageInfo = {
+  module: "dashboard",
+  subModule: "overview",
+  pageName: "Main Dashboard",
+  URL: "/dashboard/overview"
+};
+
+const userInfo = {
+  userID,
+  userType,
+  userRole,
+  loginStatus
+};
+
+const ctaName = "Learn More";
+const ctaType = "button";
+const ctaPosition = "top-banner";
+
+
+
+dlEvent.loginAttempt(userID, userType, userRole, loginStatus);
+
+dlEvent.loginSuccess(userID, userType, userRole, loginStatus);
+
+dlEvent.loginFail(userID, userType, userRole, loginStatus, errorType, errorMessage, errorCode);
+
+dlEvent.siteSearch(searchType, searchKeyword, searchResultCount);
+
+dlEvent.docDownload(docType, docName, docSize);
+
+dlEvent.docEmail(docType, docName, docSize);
+
+dlEvent.videoPlay(videoName, videoViewTime, videoDuration, videoPercentComplete);
+
+dlEvent.pageView(siteInfo, pageInfo, userInfo);
+
+dlEvent.clickTracking(ctaName, ctaType, ctaPosition);
