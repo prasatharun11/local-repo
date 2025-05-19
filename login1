@@ -1,0 +1,47 @@
+signIn.renderEl(
+  { el: '#okta-login-container' },
+  function success(res) {
+    console.log("Login success", res);
+  },
+  function error(err) {
+    console.error("Login error", err);
+  }
+);
+
+// Wait for DOM and element before observing
+function waitForElement(selector, callback) {
+  const el = document.querySelector(selector);
+  if (el) {
+    callback(el);
+  } else {
+    setTimeout(() => waitForElement(selector, callback), 100);
+  }
+}
+
+// Start observing once the container is ready
+waitForElement('#okta-login-container', (container) => {
+  const observer = new MutationObserver(() => {
+    const usernameInput = document.querySelector('input[name="username"]');
+    const passwordInput = document.querySelector('input[name="password"]');
+    const submitBtn = document.querySelector('input[type="submit"]');
+
+    if (submitBtn && usernameInput && !submitBtn._usernameHandled) {
+      submitBtn._usernameHandled = true;
+      submitBtn.addEventListener('click', () => {
+        console.log("Username step submitted:", usernameInput.value);
+      });
+    }
+
+    if (submitBtn && passwordInput && !submitBtn._passwordHandled) {
+      submitBtn._passwordHandled = true;
+      submitBtn.addEventListener('click', () => {
+        console.log("Password step submitted (hidden for security)");
+      });
+    }
+  });
+
+  observer.observe(container, {
+    childList: true,
+    subtree: true
+  });
+});
