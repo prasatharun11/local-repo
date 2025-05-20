@@ -1,0 +1,22 @@
+private ResponseHolder parseResponse(InputStream response) {
+    ResponseHolder rh = null;
+    try {
+        SAXParserFactory factory = SAXParserFactory.newInstance();
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setXIncludeAware(false);
+        factory.setNamespaceAware(true);
+
+        SAXParser saxParser = factory.newSAXParser();
+        ResponseParser rp = new ResponseParser();
+        saxParser.parse(response, rp);
+        rh = rp.responseHolder;
+    } catch (Exception e) {
+        rh = null;
+        LOGGER.info(Encode.forJava("ResponseHolder :" + e.getMessage()));
+    }
+
+    return rh;
+}
