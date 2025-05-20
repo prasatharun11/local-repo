@@ -1,0 +1,31 @@
+@WebFilter("/*") // Apply to all requests
+public class MethodCheckFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+        throws IOException, ServletException {
+
+        if (request instanceof HttpServletRequest && response instanceof HttpServletResponse) {
+            HttpServletRequest httpReq = (HttpServletRequest) request;
+            HttpServletResponse httpRes = (HttpServletResponse) response;
+
+            String uri = httpReq.getRequestURI();
+            String method = httpReq.getMethod();
+
+            // Block direct access to JSP via POST
+            if (uri.endsWith(".jsp") && !"GET".equalsIgnoreCase(method)) {
+                httpRes.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED,
+                        "JSP pages can only be accessed via GET");
+                return;
+            }
+
+            // For specific actions like /secureAction, only allow POST
+            if (uri.endsWith("/secureAction") && !"POST".equalsIgnoreCase(method)) {
+                httpRes.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED,
+                        "Only POST is allowed for this action");
+                return;
+            }
+        }
+
+        chain.doFilter(request, response);
+    }
+}
