@@ -1,0 +1,126 @@
+# Debugging SOAP Calls with Apache CXF in Eclipse (Gradle Project)
+
+Since you're using Apache CXF, here's a comprehensive guide to debug SOAP requests and responses:
+
+## 1. Add Logging Interceptors (Recommended Approach)
+
+First, ensure you have the CXF logging dependency in your `build.gradle`:
+
+```gradle
+implementation 'org.apache.cxf:cxf-rt-features-logging:3.5.5'
+```
+
+Then configure logging interceptors in your client code:
+
+```java
+import org.apache.cxf.interceptor.LoggingInInterceptor;
+import org.apache.cxf.interceptor.LoggingOutInterceptor;
+
+// For JAX-WS proxy client
+YourService service = new YourService();
+YourPortType port = service.getYourPort();
+
+// Add logging interceptors
+org.apache.cxf.endpoint.Client client = org.apache.cxf.frontend.ClientProxy.getClient(port);
+client.getInInterceptors().add(new LoggingInInterceptor());
+client.getOutInterceptors().add(new LoggingOutInterceptor());
+
+// Make your SOAP call
+port.yourMethod(params);
+```
+
+## 2. Configure Detailed Logging in Eclipse
+
+Create a `log4j2.xml` file in `src/main/resources`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="org.apache.cxf" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>
+```
+
+Add these dependencies to your `build.gradle`:
+
+```gradle
+implementation 'org.apache.logging.log4j:log4j-core:2.17.1'
+implementation 'org.apache.logging.log4j:log4j-api:2.17.1'
+```
+
+## 3. Eclipse Debugging Setup
+
+1. Set breakpoints in:
+   - Where you create the CXF client
+   - Where you make the SOAP call
+   - Where you process the response
+
+2. Right-click your project → Debug As → Java Application
+
+3. Use these Eclipse views:
+   - Variables view to inspect objects
+   - Expressions view to evaluate specific expressions
+   - Breakpoints view to manage breakpoints
+
+## 4. Advanced CXF Configuration
+
+For more control over logging format:
+
+```java
+LoggingInInterceptor loggingInInterceptor = new LoggingInInterceptor();
+loggingInInterceptor.setPrettyLogging(true);  // Formats XML for readability
+
+LoggingOutInterceptor loggingOutInterceptor = new LoggingOutInterceptor();
+loggingOutInterceptor.setPrettyLogging(true);
+
+client.getInInterceptors().add(loggingInInterceptor);
+client.getOutInterceptors().add(loggingOutInterceptor);
+```
+
+## 5. Using CXF Feature (Alternative Approach)
+
+```java
+import org.apache.cxf.feature.LoggingFeature;
+
+YourService service = new YourService();
+YourPortType port = service.getYourPort();
+
+LoggingFeature loggingFeature = new LoggingFeature();
+loggingFeature.setPrettyLogging(true);
+
+// If using JAX-WS
+((BindingProvider)port).getBinding().getFeatures().add(loggingFeature);
+```
+
+## 6. Viewing Output in Eclipse
+
+The SOAP messages will appear in:
+- Eclipse Console view (for System.out logging)
+- Eclipse Debug perspective variables view
+- Your configured log file (if using file appender)
+
+## Sample Output Format
+
+You'll see messages like:
+```
+18:45:22.123 [main] DEBUG org.apache.cxf.services.YourService - Outbound Message
+---------------------------
+ID: 1
+Address: http://your.endpoint.url
+Encoding: UTF-8
+Headers: {...}
+Payload: <soap:Envelope>...</soap:Envelope>
+```
+
+Would you like me to provide specific guidance for any particular aspect of your CXF implementation (like WS-Security, MTOM attachments, etc.)?
