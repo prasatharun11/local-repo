@@ -1,0 +1,89 @@
+# Debugging SOAP Calls in a Gradle Project in Eclipse
+
+Since you're making SOAP calls from a Java Gradle project in Eclipse, here are the best approaches to debug requests and responses:
+
+## 1. Enable SOAP Message Logging with JAX-WS
+
+If you're using JAX-WS (the standard Java API for SOAP), add these system properties to your Gradle run configuration:
+
+```gradle
+run {
+    systemProperties = [
+        'com.sun.xml.ws.transport.http.client.HttpTransportPipe.dump': 'true',
+        'com.sun.xml.internal.ws.transport.http.client.HttpTransportPipe.dump': 'true',
+        'com.sun.xml.ws.transport.http.HttpAdapter.dump': 'true',
+        'com.sun.xml.internal.ws.transport.http.HttpAdapter.dump': 'true'
+    ]
+}
+```
+
+Or add this to your `build.gradle` for test execution:
+```gradle
+test {
+    systemProperty 'com.sun.xml.ws.transport.http.client.HttpTransportPipe.dump', 'true'
+    // Add other properties as needed
+}
+```
+
+## 2. Use a SOAP Interceptor Library
+
+Add a logging interceptor to your project:
+
+For Apache CXF:
+```gradle
+implementation 'org.apache.cxf:cxf-rt-features-logging:3.5.5'
+```
+
+Then configure logging:
+```java
+import org.apache.cxf.interceptor.LoggingInInterceptor;
+import org.apache.cxf.interceptor.LoggingOutInterceptor;
+
+// For your SOAP port/service
+port.getInInterceptors().add(new LoggingInInterceptor());
+port.getOutInterceptors().add(new LoggingOutInterceptor());
+```
+
+## 3. Debug with Eclipse Breakpoints
+
+1. Set breakpoints where you create the SOAP request and handle the response
+2. Run in debug mode (Right-click → Debug As → Java Application)
+3. Inspect variables in the Variables view
+
+## 4. Use a Proxy Tool
+
+Configure your SOAP client to use a proxy like Fiddler or Charles:
+```java
+System.setProperty("http.proxyHost", "localhost");
+System.setProperty("http.proxyPort", "8888"); // Fiddler default port
+```
+
+## 5. Log Raw XML
+
+Capture the raw SOAP XML:
+```java
+// For SAAJ (SOAP with Attachments API for Java)
+SOAPMessage message = ...; // your SOAP message
+ByteArrayOutputStream out = new ByteArrayOutputStream();
+message.writeTo(out);
+String soapXml = out.toString();
+System.out.println(soapXml);
+```
+
+## 6. Gradle-specific Approach
+
+Add SLF4J logging to your `build.gradle`:
+```gradle
+implementation 'org.slf4j:slf4j-api:1.7.36'
+implementation 'ch.qos.logback:logback-classic:1.2.11'
+```
+
+Then configure `logback.xml` in `src/main/resources`:
+```xml
+<configuration>
+    <logger name="org.apache.cxf" level="DEBUG"/>
+    <logger name="com.sun.xml.internal.ws" level="DEBUG"/>
+</configuration>
+```
+
+Would you like me to provide more specific details about any particular approach based on the SOAP client library you're using (like JAX-WS, Apache CXF, Axis, etc.)?
