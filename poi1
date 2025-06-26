@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11) // Use Java 11 or higher
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Core Apache POI
+    implementation 'org.apache.poi:poi-ooxml:5.4.1'
+
+    // These are pulled in automatically, but you can declare explicitly to ensure correct versions
+    implementation 'org.apache.commons:commons-collections4:4.4'
+    implementation 'org.apache.commons:commons-compress:1.26.1'
+    implementation 'org.apache.xmlbeans:xmlbeans:5.2.1'
+    implementation 'org.apache.poi:ooxml-schemas:1.4'
+    implementation 'com.zaxxer:SparseBitSet:1.2' // required indirectly
+
+    // For handling OOXML file formats and avoiding JAXB issues
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.0'
+    implementation 'jakarta.activation:jakarta.activation-api:2.1.2'
+
+    // Only if using logging
+    implementation 'org.slf4j:slf4j-api:2.0.13'
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.13'
+}
