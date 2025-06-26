@@ -1,0 +1,47 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Scanner;
+
+public class ExcelCreator {
+
+    public static void main(String[] args) {
+        // Prompt user for file path
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter the full path where the Excel file should be saved (e.g., C:\\\\Users\\\\YourName\\\\Desktop\\\\sample.xlsx): ");
+        String filePath = scanner.nextLine();
+        scanner.close();
+
+        // Create a workbook and sheet
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("SampleSheet");
+
+        // Create a header row
+        Row headerRow = sheet.createRow(0);
+        Cell headerCell1 = headerRow.createCell(0);
+        headerCell1.setCellValue("ID");
+
+        Cell headerCell2 = headerRow.createCell(1);
+        headerCell2.setCellValue("Name");
+
+        // Add sample data
+        Row row1 = sheet.createRow(1);
+        row1.createCell(0).setCellValue(1);
+        row1.createCell(1).setCellValue("Alice");
+
+        Row row2 = sheet.createRow(2);
+        row2.createCell(0).setCellValue(2);
+        row2.createCell(1).setCellValue("Bob");
+
+        // Write to file
+        try (FileOutputStream fileOut = new FileOutputStream(filePath)) {
+            workbook.write(fileOut);
+            workbook.close();
+            System.out.println("Excel file created successfully at: " + filePath);
+        } catch (IOException e) {
+            System.err.println("Error writing Excel file: " + e.getMessage());
+        }
+    }
+}
