@@ -1,0 +1,29 @@
+// Change the import from java.util.Base64 to:
+import org.apache.commons.codec.binary.Base64;
+
+private static final Base64 apacheBase64 = new Base64();
+
+public static String encrypt(String data) throws Exception {
+    Cipher c = Cipher.getInstance(ALGO_TYPE);
+    byte[] iv = generateIV();
+    c.init(Cipher.ENCRYPT_MODE, KEY, new GCMParameterSpec(128, iv));
+    byte[] encVal = c.doFinal(data.getBytes("UTF-8"));
+    
+    // Combine IV and encrypted data
+    byte[] combined = new byte[GCM_IV_LENGTH + encVal.length];
+    System.arraycopy(iv, 0, combined, 0, GCM_IV_LENGTH);
+    System.arraycopy(encVal, 0, combined, GCM_IV_LENGTH, encVal.length);
+    
+    return apacheBase64.encodeToString(combined);  // Using Apache Base64
+}
+
+public static String decrypt(String encryptedData) throws Exception {
+    byte[] combined = apacheBase64.decode(encryptedData);  // Using Apache Base64
+    byte[] iv = Arrays.copyOfRange(combined, 0, GCM_IV_LENGTH);
+    byte[] encVal = Arrays.copyOfRange(combined, GCM_IV_LENGTH, combined.length);
+    
+    Cipher c = Cipher.getInstance(ALGO_TYPE);
+    c.init(Cipher.DECRYPT_MODE, KEY, new GCMParameterSpec(128, iv));
+    byte[] decValue = c.doFinal(encVal);
+    return new String(decValue, "UTF-8");
+}
