@@ -1,0 +1,99 @@
+Perfect — using the Base64-encoded client_id:client_secret string for the Authorization header is a clean and secure approach.
+
+So going forward, your Java code becomes even simpler — you just use the Authorization: Basic <base64> header directly.
+
+
+---
+
+✅ Updated Java Code (Using Pre-encoded Base64 Token)
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class OktaTokenFetcher {
+
+    // Constants (can be externalized later)
+    private static final String REGION = "us"; // ex: us, eu, apac
+    private static final String OKTA_DOMAIN = "dev-123456.okta.com"; // Replace with your actual domain
+    private static final String AUTH_SERVER_ID = "default";
+    private static final String BASE64_AUTH_HEADER = "Y2xpZW50SWQ6Y2xpZW50U2VjcmV0"; // Replace with your real base64(clientId:clientSecret)
+    private static final String SCOPE = "api.read";
+
+    public static void main(String[] args) throws IOException {
+        String accessToken = fetchAccessToken();
+        System.out.println("Access Token: " + accessToken);
+    }
+
+    public static String fetchAccessToken() throws IOException {
+        String tokenUrl = String.format("https://%s/oauth2/%s/v1/token", OKTA_DOMAIN, AUTH_SERVER_ID);
+
+        URL url = new URL(tokenUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+
+        // Pre-encoded Base64 client credentials
+        conn.setRequestProperty("Authorization", "Basic " + BASE64_AUTH_HEADER);
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        conn.setDoOutput(true);
+
+        // Form body
+        String body = "grant_type=client_credentials&scope=" + SCOPE;
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(body.getBytes());
+        }
+
+        // Handle response
+        int responseCode = conn.getResponseCode();
+        InputStream is = (responseCode == 200) ? conn.getInputStream() : conn.getErrorStream();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+
+            if (responseCode != 200) {
+                throw new RuntimeException("Failed to get token: " + response);
+            }
+
+            return parseAccessToken(response.toString());
+        }
+    }
+
+    private static String parseAccessToken(String jsonResponse) {
+        String marker = "\"access_token\":\"";
+        int start = jsonResponse.indexOf(marker);
+        if (start == -1) {
+            throw new RuntimeException("access_token not found in response");
+        }
+        int end = jsonResponse.indexOf("\"", start + marker.length());
+        return jsonResponse.substring(start + marker.length(), end);
+    }
+}
+
+
+---
+
+🔐 Security Tip
+
+Avoid committing your Base64 credentials (clientId:clientSecret) to version control. Treat it like a password:
+
+Load it from environment variables or encrypted secrets in CI/CD
+
+Consider encrypting the config if stored on disk
+
+
+
+---
+
+Let me know if you'd like:
+
+A version using Spring Boot + RestTemplate/WebClient
+
+Or a version that reads config from a .properties file
+
+
+I can give you a ready-to-run snippet for either.
+
