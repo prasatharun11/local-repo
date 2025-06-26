@@ -1,0 +1,70 @@
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONObject;
+
+public class OktaTokenManager {
+
+    // Configuration constants
+    private static final String REGION = "us";
+    private static final String OKTA_DOMAIN = "dev-123456.okta.com"; // Replace this
+    private static final String AUTH_SERVER_ID = "default";
+    private static final String BASE64_AUTH_HEADER = "Y2xpZW50SWQ6Y2xpZW50U2VjcmV0"; // Replace this
+    private static final String SCOPE = "api.read";
+
+    private static String accessToken = null;
+    private static long tokenExpiryTimeMillis = 0;
+
+    public static void main(String[] args) {
+        try {
+            String token = getAccessToken();
+            System.out.println("Access Token: " + token);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String getAccessToken() throws IOException {
+        long currentTime = System.currentTimeMillis();
+
+        if (accessToken != null && currentTime < tokenExpiryTimeMillis) {
+            return accessToken;
+        }
+
+        String tokenUrl = String.format("https://%s/oauth2/%s/v1/token", OKTA_DOMAIN, AUTH_SERVER_ID);
+        URL url = new URL(tokenUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Authorization", "Basic " + BASE64_AUTH_HEADER);
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        conn.setDoOutput(true);
+
+        String requestBody = "grant_type=client_credentials&scope=" + SCOPE;
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(requestBody.getBytes());
+        }
+
+        int responseCode = conn.getResponseCode();
+        InputStream is = (responseCode == 200) ? conn.getInputStream() : conn.getErrorStream();
+
+        StringBuilder responseBuilder = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                responseBuilder.append(line);
+            }
+        }
+
+        if (responseCode != 200) {
+            throw new IOException("Failed to fetch access token: " + responseBuilder);
+        }
+
+        // Parse JSON properly using org.json
+        JSONObject json = new JSONObject(responseBuilder.toString());
+        accessToken = json.getString("access_token");
+        long expiresIn = json.getLong("expires_in");
+
+        tokenExpiryTimeMillis = System.currentTimeMillis() + (expiresIn * 1000) - 10000; // 10s buffer
+        return accessToken;
+    }
+}
