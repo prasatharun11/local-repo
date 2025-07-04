@@ -1,0 +1,50 @@
+private XSSFColor getXSSFColor(String htmlColor) {
+    if (htmlColor == null) {
+        return new XSSFColor(java.awt.Color.BLACK, new DefaultIndexedColorMap());
+    }
+    
+    if (htmlColor.startsWith("#")) {
+        String hex = htmlColor.substring(1);
+        if (hex.length() == 3) {
+            hex = String.format("%s%s%s%s%s%s", 
+                hex.charAt(0), hex.charAt(0), 
+                hex.charAt(1), hex.charAt(1), 
+                hex.charAt(2), hex.charAt(2));
+        }
+        
+        try {
+            int red = Integer.parseInt(hex.substring(0, 2), 16);
+            int green = Integer.parseInt(hex.substring(2, 4), 16);
+            int blue = Integer.parseInt(hex.substring(4, 6), 16);
+            
+            return new XSSFColor(new java.awt.Color(red, green, blue), new DefaultIndexedColorMap());
+        } catch (Exception e) {
+            return new XSSFColor(java.awt.Color.BLACK, new DefaultIndexedColorMap());
+        }
+    }
+
+    htmlColor = htmlColor.replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+
+    switch (htmlColor) {
+        case "red":
+            return new XSSFColor(java.awt.Color.RED, new DefaultIndexedColorMap());
+        case "green":
+            return new XSSFColor(java.awt.Color.GREEN, new DefaultIndexedColorMap());
+        case "blue":
+            return new XSSFColor(java.awt.Color.BLUE, new DefaultIndexedColorMap());
+        case "yellow":
+            return new XSSFColor(java.awt.Color.YELLOW, new DefaultIndexedColorMap());
+        case "cyan":
+            return new XSSFColor(java.awt.Color.CYAN, new DefaultIndexedColorMap());
+        case "magenta":
+            return new XSSFColor(java.awt.Color.MAGENTA, new DefaultIndexedColorMap());
+        case "white":
+            return new XSSFColor(java.awt.Color.WHITE, new DefaultIndexedColorMap());
+        case "black":
+            return new XSSFColor(java.awt.Color.BLACK, new DefaultIndexedColorMap());
+        case "gray":
+            return new XSSFColor(java.awt.Color.GRAY, new DefaultIndexedColorMap());
+        default:
+            return new XSSFColor(java.awt.Color.BLACK, new DefaultIndexedColorMap());
+    }
+}
