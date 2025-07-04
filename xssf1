@@ -1,0 +1,43 @@
+private CellStyle getOrCreateStyle(Workbook workbook, String fillForegroundColor, FillPatternType fillPattern,
+    String dataFormat, HorizontalAlignment alignment, BorderStyle border, String styleFont, boolean wrapText) {
+    
+    // Create a unique key for the style
+    String key = fillForegroundColor + "-" + fillPattern + "-" + dataFormat + "-" + alignment + "-" + border + "-"
+        + styleFont + "-" + wrapText;
+    
+    // Use workbook-specific cache
+    Map<String, CellStyle> workbookStyleCache = styleCache.computeIfAbsent(workbook, k -> new HashMap<>());
+    
+    if (workbookStyleCache.containsKey(key)) {
+        return workbookStyleCache.get(key);
+    }
+    
+    // Create new style in the target workbook
+    CellStyle style = workbook.createCellStyle();
+    
+    if (!fillForegroundColor.isEmpty()) {
+        style.setFillForegroundColor(Short.parseShort(fillForegroundColor));
+    }
+    if (Objects.nonNull(fillPattern)) {
+        style.setFillPattern(fillPattern);
+    }
+    if (!dataFormat.isEmpty()) {
+        style.setDataFormat(workbook.createDataFormat().getFormat(dataFormat));
+    }
+    if (Objects.nonNull(alignment)) {
+        style.setAlignment(alignment);
+    }
+    if (Objects.nonNull(border)) {
+        style.setBorderTop(border);
+        style.setBorderBottom(border);
+        style.setBorderLeft(border);
+        style.setBorderRight(border);
+    }
+    if (!styleFont.isEmpty()) {
+        style.setFont(fontCache.get(styleFont));  // Ensure font is for this workbook too
+    }
+    style.setWrapText(wrapText);
+    
+    workbookStyleCache.put(key, style);
+    return style;
+}
