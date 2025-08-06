@@ -1,0 +1,123 @@
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+public class ProgramResponse {
+    private String email;
+    private String userType;
+
+    @JsonProperty("usaPrograms")
+    private List<Program> usaPrograms;
+
+    @JsonProperty("nonUsaPrograms")
+    private List<Program> nonUsaPrograms;
+
+    @Data
+    public static class Program {
+        private String programID;
+        private String countryCode;
+        private String countryName;
+        private String regionName;
+        private List<Policy> policies;
+    }
+
+    @Data
+    public static class Policy {
+        private String policyId;
+        private String policyEffectiveDate;
+    }
+}
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+public class ProgramProcessor {
+    public static void main(String[] args) throws Exception {
+        String json = "{\n" +
+                "  \"email\": \"abc@test.com\",\n" +
+                "  \"userType\": \"Global Broker\",\n" +
+                "  \"usaPrograms\": [\n" +
+                "    {\n" +
+                "      \"programID\": \"P-204587900\",\n" +
+                "      \"countryCode\": \"USA\",\n" +
+                "      \"countryName\": \"U.S.A.\",\n" +
+                "      \"regionName\": \"AMERICAS\",\n" +
+                "      \"policies\": [\n" +
+                "        {\n" +
+                "          \"policyId\": \"WS11007834\",\n" +
+                "          \"policyEffectiveDate\": \"2021-02-19T00:00:00.000Z\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "          \"policyId\": \"80024547\",\n" +
+                "          \"policyEffectiveDate\": \"2021-02-19T00:00:00.000Z\"\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  ],\n" +
+                "  \"nonUsaPrograms\": [\n" +
+                "    {\n" +
+                "      \"programID\": \"P-242146800\",\n" +
+                "      \"countryCode\": \"GBR\",\n" +
+                "      \"countryName\": \"GREAT BRITAIN\",\n" +
+                "      \"regionName\": \"EMEA\"\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        // Deserialize JSON into VO using Jackson
+        ObjectMapper mapper = new ObjectMapper();
+        ProgramResponse response = mapper.readValue(json, ProgramResponse.class);
+
+        // 1) Combine nonUsaPrograms into chunks of 2000
+        List<String> programList = response.getNonUsaPrograms().stream()
+                .map(p -> p.getProgramID() + "|" + p.getCountryCode())
+                .collect(Collectors.toList());
+
+        List<String> programChunks = chunkList(programList, 2000).stream()
+                .map(list -> String.join("~", list))
+                .collect(Collectors.toList());
+
+        // 2) Combine policies into chunks of 1450 with yyyy-MM-dd
+        DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        List<String> policyList = response.getUsaPrograms().stream()
+                .flatMap(p -> p.getPolicies().stream())
+                .map(policy -> {
+                    String date = LocalDateTime.parse(policy.getPolicyEffectiveDate(), inputFormatter)
+                            .format(outputFormatter);
+                    return policy.getPolicyId() + "|" + date;
+                })
+                .collect(Collectors.toList());
+
+        List<String> policyChunks = chunkList(policyList, 1450).stream()
+                .map(list -> String.join("~", list))
+                .collect(Collectors.toList());
+
+        // 3) Count totals
+        int totalPrograms = programList.size();
+        int totalPolicies = policyList.size();
+
+        // Output Results
+        System.out.println("Program Chunks:");
+        programChunks.forEach(System.out::println);
+        System.out.println("\nPolicy Chunks:");
+        policyChunks.forEach(System.out::println);
+        System.out.println("\nTotal Program Count: " + totalPrograms);
+        System.out.println("Total Policy Count: " + totalPolicies);
+    }
+
+    // Utility to split list into chunks
+    private static <T> List<List<T>> chunkList(List<T> list, int chunkSize) {
+        return IntStream.range(0, (list.size() + chunkSize - 1) / chunkSize)
+                .mapToObj(i -> list.subList(i * chunkSize, Math.min(list.size(), (i + 1) * chunkSize)))
+                .collect(Collectors.toList());
+    }
+}
