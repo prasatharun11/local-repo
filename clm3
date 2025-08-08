@@ -1,0 +1,66 @@
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+public class MockProgramResponseGenerator {
+
+    public static ProgramResponse generateMockData() {
+        int totalPrograms = 4000;
+        int totalPolicies = 4350;
+
+        ProgramResponse response = new ProgramResponse();
+        response.setEmail("mockuser@example.com");
+        response.setUserType("Global Broker");
+
+        List<ProgramResponse.Program> usaPrograms = new ArrayList<>();
+        List<ProgramResponse.Program> nonUsaPrograms = new ArrayList<>();
+
+        Random random = new Random();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        // Generate 4000 programs
+        for (int i = 0; i < totalPrograms; i++) {
+            ProgramResponse.Program program = new ProgramResponse.Program();
+            program.setProgramID("P-" + (100000000 + i)); // e.g., P-100000000
+            program.setCountryCode(i % 2 == 0 ? "USA" : getRandomCountryCode());
+            program.setCountryName("Country-" + program.getCountryCode());
+            program.setRegionName("Region-" + (i % 5 + 1));
+            program.setPolicies(new ArrayList<>());
+
+            if ("USA".equals(program.getCountryCode())) {
+                usaPrograms.add(program);
+            } else {
+                nonUsaPrograms.add(program);
+            }
+        }
+
+        // Distribute 4350 policies randomly among USA programs
+        for (int i = 0; i < totalPolicies; i++) {
+            ProgramResponse.Policy policy = new ProgramResponse.Policy();
+            policy.setPolicyId("POL" + (1000000 + i)); // e.g., POL1000001
+
+            // Random date between 2010 and 2030
+            int randomYear = 2010 + random.nextInt(21); // [2010, 2030]
+            int randomMonth = 1 + random.nextInt(12);
+            int randomDay = 1 + random.nextInt(28); // to keep it simple
+
+            LocalDate date = LocalDate.of(randomYear, randomMonth, randomDay);
+            String isoDate = date.atStartOfDay() + ".000Z"; // e.g., 2025-08-08T00:00:00.000Z
+            policy.setPolicyEffectiveDate(isoDate);
+
+            // Assign to random USA program
+            int programIndex = random.nextInt(usaPrograms.size());
+            usaPrograms.get(programIndex).getPolicies().add(policy);
+        }
+
+        response.setUsaPrograms(usaPrograms);
+        response.setNonUsaPrograms(nonUsaPrograms);
+
+        return response;
+    }
+
+    private static String getRandomCountryCode() {
+        String[] codes = {"GBR", "FRA", "DEU", "AUS", "CAN", "BRA", "CHN", "IND", "ZAF", "JPN"};
+        return codes[new Random().nextInt(codes.length)];
+    }
+}
