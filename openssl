@@ -1,0 +1,4 @@
+openssl s_client -connect s3.amazonaws.com:443 -showcerts < /dev/null \
+  | sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' > all-certs.pem
+
+csplit -f cert- -b "%02d.pem" all-certs.pem '/-----BEGIN CERTIFICATE-----/' '{*}'
