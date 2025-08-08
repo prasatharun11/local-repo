@@ -1,0 +1,67 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+public class OptimizedProgramProcessor {
+
+    public static Map<String, String> processProgramResponse(String json) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        ProgramResponse response = mapper.readValue(json, ProgramResponse.class);
+
+        // Prepare result
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("userType", response.getUserType());
+
+        // Date formatters
+        DateTimeFormatter inputFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        // Prepare chunks
+        StringBuilder[] programChunks = {new StringBuilder(), new StringBuilder()};
+        StringBuilder[] policyChunks = {new StringBuilder(), new StringBuilder(), new StringBuilder()};
+
+        int programCount = 0;
+        int policyCount = 0;
+
+        // Process non-USA programs for programChunks
+        List<ProgramResponse.Program> nonUsaPrograms = Optional.ofNullable(response.getNonUsaPrograms()).orElse(Collections.emptyList());
+        for (ProgramResponse.Program program : nonUsaPrograms) {
+            String chunkEntry = program.getProgramID() + "|" + program.getCountryCode() + "~";
+            int chunkIndex = programCount / 2000;
+            if (chunkIndex < 2) {
+                programChunks[chunkIndex].append(chunkEntry);
+            }
+            programCount++;
+        }
+
+        // Process USA program policies for policyChunks
+        List<ProgramResponse.Program> usaPrograms = Optional.ofNullable(response.getUsaPrograms()).orElse(Collections.emptyList());
+        for (ProgramResponse.Program program : usaPrograms) {
+            List<ProgramResponse.Policy> policies = Optional.ofNullable(program.getPolicies()).orElse(Collections.emptyList());
+            for (ProgramResponse.Policy policy : policies) {
+                String formattedDate = LocalDateTime.parse(policy.getPolicyEffectiveDate(), inputFmt).format(outputFmt);
+                String chunkEntry = policy.getPolicyId() + "|" + formattedDate + "~";
+                int chunkIndex = policyCount / 1450;
+                if (chunkIndex < 3) {
+                    policyChunks[chunkIndex].append(chunkEntry);
+                }
+                policyCount++;
+            }
+        }
+
+        // Add chunks to result
+        result.put("programChunk1", programChunks[0].toString());
+        result.put("programChunk2", programChunks[1].toString());
+        result.put("policyChunk1", policyChunks[0].toString());
+        result.put("policyChunk2", policyChunks[1].toString());
+        result.put("policyChunk3", policyChunks[2].toString());
+
+        // Add counts
+        result.put("totalProgramCount", String.valueOf(programCount));
+        result.put("totalPolicyCount", String.valueOf(policyCount));
+
+        return result;
+    }
+}
