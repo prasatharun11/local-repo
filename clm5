@@ -1,0 +1,84 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+public class OptimizedProgramProcessor {
+
+    private static final int PROGRAM_CHUNK_SIZE = 2000;
+    private static final int PROGRAM_MAX_LIMIT = 4000;
+    private static final int POLICY_CHUNK_SIZE = 1450;
+    private static final int POLICY_MAX_LIMIT = 4350;
+
+    public static Map<String, String> processProgramResponse(String json) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        ProgramResponse response = mapper.readValue(json, ProgramResponse.class);
+
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("userType", response.getUserType());
+
+        // Prepare formatters
+        DateTimeFormatter inputFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        // Build non-USA program entries
+        List<String> nonUsaProgramEntries = Optional.ofNullable(response.getNonUsaPrograms())
+                .orElse(Collections.emptyList())
+                .stream()
+                .limit(PROGRAM_MAX_LIMIT)
+                .map(program -> program.getProgramID() + "|" + program.getCountryCode() + "~")
+                .collect(Collectors.toList());
+
+        // Build USA policy entries
+        List<String> usaPolicyEntries = Optional.ofNullable(response.getUsaPrograms())
+                .orElse(Collections.emptyList())
+                .stream()
+                .flatMap(program -> Optional.ofNullable(program.getPolicies()).orElse(Collections.emptyList()).stream())
+                .limit(POLICY_MAX_LIMIT)
+                .map(policy -> {
+                    String formattedDate = LocalDateTime.parse(policy.getPolicyEffectiveDate(), inputFmt).format(outputFmt);
+                    return policy.getPolicyId() + "|" + formattedDate + "~";
+                })
+                .collect(Collectors.toList());
+
+        // Chunk and append ~ safely
+        String[] programChunks = partitionChunks(nonUsaProgramEntries, PROGRAM_CHUNK_SIZE, 2);
+        String[] policyChunks = partitionChunks(usaPolicyEntries, POLICY_CHUNK_SIZE, 3);
+
+        // Add to result map
+        result.put("programChunk1", programChunks[0]);
+        result.put("programChunk2", programChunks[1]);
+        result.put("policyChunk1", policyChunks[0]);
+        result.put("policyChunk2", policyChunks[1]);
+        result.put("policyChunk3", policyChunks[2]);
+        result.put("totalProgramCount", String.valueOf(nonUsaProgramEntries.size()));
+        result.put("totalPolicyCount", String.valueOf(usaPolicyEntries.size()));
+
+        return result;
+    }
+
+    private static String[] partitionChunks(List<String> entries, int chunkSize, int numChunks) {
+        StringBuilder[] chunks = Stream.generate(StringBuilder::new)
+                .limit(numChunks)
+                .toArray(StringBuilder[]::new);
+
+        for (int i = 0; i < entries.size(); i++) {
+            int chunkIndex = i / chunkSize;
+            if (chunkIndex < numChunks) {
+                chunks[chunkIndex].append(entries.get(i));
+            }
+        }
+
+        return Stream.of(chunks)
+                .map(sb -> {
+                    if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '~') {
+                        sb.append("~");
+                    }
+                    return sb.toString();
+                })
+                .toArray(String[]::new);
+    }
+}
