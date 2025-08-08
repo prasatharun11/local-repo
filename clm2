@@ -1,0 +1,111 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class ProgramProcessorMapReturn {
+
+    public static void main(String[] args) throws Exception {
+        String json = "{\n" +
+                "  \"email\": \"abc@test.com\",\n" +
+                "  \"userType\": \"Global Broker\",\n" +
+                "  \"usaPrograms\": [\n" +
+                "    {\n" +
+                "      \"programID\": \"P-204587900\",\n" +
+                "      \"countryCode\": \"USA\",\n" +
+                "      \"countryName\": \"U.S.A.\",\n" +
+                "      \"regionName\": \"AMERICAS\",\n" +
+                "      \"policies\": [\n" +
+                "        {\n" +
+                "          \"policyId\": \"WS11007834\",\n" +
+                "          \"policyEffectiveDate\": \"2021-02-19T00:00:00.000Z\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "          \"policyId\": \"80024547\",\n" +
+                "          \"policyEffectiveDate\": \"2021-02-19T00:00:00.000Z\"\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  ],\n" +
+                "  \"nonUsaPrograms\": [\n" +
+                "    {\n" +
+                "      \"programID\": \"P-242146800\",\n" +
+                "      \"countryCode\": \"GBR\",\n" +
+                "      \"countryName\": \"GREAT BRITAIN\",\n" +
+                "      \"regionName\": \"EMEA\"\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        ObjectMapper mapper = new ObjectMapper();
+        ProgramResponse response = mapper.readValue(json, ProgramResponse.class);
+
+        Map<String, String> resultMap = new LinkedHashMap<>();
+
+        // Date formatter
+        DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        // Trackers
+        List<StringBuilder> programChunks = Arrays.asList(new StringBuilder(), new StringBuilder());
+        List<StringBuilder> policyChunks = Arrays.asList(new StringBuilder(), new StringBuilder(), new StringBuilder());
+
+        AtomicInteger programIndex = new AtomicInteger(0);
+        AtomicInteger policyIndex = new AtomicInteger(0);
+
+        int programCount = 0;
+        int policyCount = 0;
+
+        // Combine all programs
+        List<ProgramResponse.Program> allPrograms = new ArrayList<>();
+        if (response.getUsaPrograms() != null) allPrograms.addAll(response.getUsaPrograms());
+        if (response.getNonUsaPrograms() != null) allPrograms.addAll(response.getNonUsaPrograms());
+
+        for (ProgramResponse.Program program : allPrograms) {
+            // Program Chunking (2000 max per chunk)
+            String programEntry = program.getProgramID() + "|" + program.getCountryCode();
+            int progChunk = programCount / 2000;
+            if (progChunk < 2) {
+                if (programChunks.get(progChunk).length() > 0) {
+                    programChunks.get(progChunk).append("~");
+                }
+                programChunks.get(progChunk).append(programEntry);
+            }
+            programCount++;
+
+            // Policy Chunking (1450 max per chunk)
+            if (program.getPolicies() != null) {
+                for (ProgramResponse.Policy policy : program.getPolicies()) {
+                    String formattedDate = LocalDateTime.parse(policy.getPolicyEffectiveDate(), inputFormatter)
+                            .format(outputFormatter);
+                    String policyEntry = policy.getPolicyId() + "|" + formattedDate;
+                    int polChunk = policyCount / 1450;
+                    if (polChunk < 3) {
+                        if (policyChunks.get(polChunk).length() > 0) {
+                            policyChunks.get(polChunk).append("~");
+                        }
+                        policyChunks.get(polChunk).append(policyEntry);
+                    }
+                    policyCount++;
+                }
+            }
+        }
+
+        // Populate the result map
+        resultMap.put("userType", response.getUserType());
+        resultMap.put("programChunk1", programChunks.get(0).toString());
+        resultMap.put("programChunk2", programChunks.get(1).toString());
+        resultMap.put("policyChunk1", policyChunks.get(0).toString());
+        resultMap.put("policyChunk2", policyChunks.get(1).toString());
+        resultMap.put("policyChunk3", policyChunks.get(2).toString());
+        resultMap.put("totalProgramCount", String.valueOf(programCount));
+        resultMap.put("totalPolicyCount", String.valueOf(policyCount));
+
+        // Print result map
+        resultMap.forEach((k, v) -> {
+            System.out.println(k + ": " + v);
+        });
+    }
+}
