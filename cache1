@@ -1,0 +1,29 @@
+package com.example.cache;
+
+import org.springframework.stereotype.Component;
+
+@Component
+public class MemoryUtil {
+
+    private final long maxHeap = Runtime.getRuntime().maxMemory();
+    private final long approxEntrySize = 10 * 1024; // 10 KB
+    private final double heapBudgetFraction = 0.10; // 10%
+
+    public void printHeapAndCacheStats() {
+        long usedHeap = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long cacheBudget = (long) (maxHeap * heapBudgetFraction);
+        long maxEntries = cacheBudget / approxEntrySize;
+
+        double heapUsedPct = (usedHeap * 100.0) / maxHeap;
+        double cacheBudgetPctUsed = (heapUsedPct / (heapBudgetFraction * 100));
+
+        System.out.println("\n================ CACHE / HEAP STATUS ================");
+        System.out.printf("Max JVM Heap       : %.2f MB%n", maxHeap / (1024.0 * 1024));
+        System.out.printf("Used JVM Heap      : %.2f MB (%.2f%% of max)%n", usedHeap / (1024.0 * 1024), heapUsedPct);
+        System.out.printf("Cache Budget       : %.2f MB (%.0f%% of heap)%n", cacheBudget / (1024.0 * 1024), heapBudgetFraction * 100);
+        System.out.printf("Approx Entry Size  : %.2f KB%n", approxEntrySize / 1024.0);
+        System.out.printf("Max Cache Entries  : %,d%n", maxEntries);
+        System.out.printf("Heap %% Used vs Budget: %.2f%%%n", cacheBudgetPctUsed * 100);
+        System.out.println("======================================================\n");
+    }
+}
