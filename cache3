@@ -1,0 +1,63 @@
+package com.example.cache;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.caffeine.CaffeineCache;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+
+@Component
+public class MemoryUtil {
+
+    private final long maxHeap = Runtime.getRuntime().maxMemory();
+    private final long approxEntrySize = 10 * 1024; // default value per entry in KB
+    private final double heapBudgetFraction = 0.10; // 10%
+    private final CacheManager cacheManager;
+
+    public MemoryUtil(CacheManager cacheManager) {
+        this.cacheManager = cacheManager;
+    }
+
+    public void printHeapAndCacheStats() {
+        long usedHeap = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long cacheBudget = (long) (maxHeap * heapBudgetFraction);
+        long maxEntries = cacheBudget / approxEntrySize;
+
+        double heapUsedPct = (usedHeap * 100.0) / maxHeap;
+        double cacheBudgetPctUsed = (heapUsedPct / (heapBudgetFraction * 100));
+
+        System.out.println("\n================ CACHE / HEAP STATUS ================");
+        System.out.printf("Max JVM Heap       : %.2f MB%n", maxHeap / (1024.0 * 1024));
+        System.out.printf("Used JVM Heap      : %.2f MB (%.2f%% of max)%n", usedHeap / (1024.0 * 1024), heapUsedPct);
+        System.out.printf("Cache Budget       : %.2f MB (%.0f%% of heap)%n", cacheBudget / (1024.0 * 1024), heapBudgetFraction * 100);
+        System.out.printf("Approx Entry Size  : %.2f KB%n", approxEntrySize / 1024.0);
+        System.out.printf("Max Cache Entries  : %,d%n", maxEntries);
+        System.out.printf("Heap %% Used vs Budget: %.2f%%%n", cacheBudgetPctUsed * 100);
+
+        // Get actual Caffeine cache
+        org.springframework.cache.Cache springCache = cacheManager.getCache("userCodeCache");
+        if (springCache instanceof CaffeineCache caffeineCache) {
+            Cache<Object, Object> nativeCache = caffeineCache.getNativeCache();
+            System.out.printf("Current Cache Size : %d entries%n", nativeCache.estimatedSize());
+
+            // Show each key with size in KB
+            System.out.println("Cache Keys & Sizes (KB):");
+            nativeCache.asMap().keySet().forEach(key -> {
+                double sizeKB = getObjectSizeKB(key);
+                System.out.printf(" - %s : %.2f KB%n", key, sizeKB);
+            });
+        } else {
+            System.out.println("Cache 'userCodeCache' not found or not a CaffeineCache.");
+        }
+        System.out.println("======================================================\n");
+    }
+
+    private double getObjectSizeKB(Object obj) {
+        if (obj instanceof String str) {
+            return str.getBytes(StandardCharsets.UTF_8).length / 1024.0;
+        }
+        // fallback: rough guess for non-strings
+        return approxEntrySize / 1024.0;
+    }
+}
