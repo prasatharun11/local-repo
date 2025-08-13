@@ -1,0 +1,28 @@
+@Configuration
+@EnableCaching
+public class CacheConfig {
+
+    @Bean
+    public CacheManager cacheManager() {
+        long maxHeap = Runtime.getRuntime().maxMemory();
+        long cacheBudget = (long) (maxHeap * 0.2); // 20% of heap
+        long avgEntrySize = 1024 * 10; // assume ~10KB average per entry
+
+        long maxEntries = cacheBudget / avgEntrySize;
+
+        System.out.println("💾 Max heap: " + (maxHeap / 1024 / 1024) + " MB");
+        System.out.println("📦 Cache budget: " + (cacheBudget / 1024 / 1024) + " MB");
+        System.out.println("🔄 Max entries in cache: " + maxEntries);
+
+        Caffeine<Object, Object> caffeineBuilder = Caffeine.newBuilder()
+            .maximumSize(maxEntries) // LRU eviction
+            .recordStats()
+            .removalListener((Object key, Object value, RemovalCause cause) -> {
+                System.out.println("🗑 Evicted key: " + key + " | Cause: " + cause);
+            });
+
+        return new CaffeineCacheManager("userCodeCache") {{
+            setCaffeine(caffeineBuilder);
+        }};
+    }
+}
