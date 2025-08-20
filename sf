@@ -1,0 +1,31 @@
+public class StringFormatter {
+
+    public static String formatString(String input) {
+        if (input == null) {
+            return "0000000000"; // return 10 zeros for null input
+        }
+
+        // Step 1: Trim whitespace
+        String result = input.trim();
+
+        // Step 2: Remove all special characters (keep only letters and digits)
+        result = result.replaceAll("[^a-zA-Z0-9]", "");
+
+        // Step 3: Adjust length
+        if (result.length() > 10) {
+            result = result.substring(result.length() - 10); // keep rightmost 10 chars
+        } else {
+            // pad with zeros on the left
+            result = String.format("%10s", result).replace(' ', '0');
+        }
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(formatString("  -abc123- "));     // 0000abc123
+        System.out.println(formatString("HelloWorld2025"));  // elloWorld25
+        System.out.println(formatString("123"));             // 0000000123
+        System.out.println(formatString(null));              // 0000000000
+    }
+}
