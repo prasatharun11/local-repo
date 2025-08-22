@@ -1,0 +1,32 @@
+private static void copyMergedRegions(Sheet srcSheet, int startRow, int endRow,
+                                      int startCol, int endCol,
+                                      Sheet destSheet, int destRow, int destCol) {
+
+    for (int i = 0; i < srcSheet.getNumMergedRegions(); i++) {
+        CellRangeAddress region = srcSheet.getMergedRegion(i);
+
+        if (region.getFirstRow() >= startRow && region.getLastRow() <= endRow &&
+            region.getFirstColumn() >= startCol && region.getLastColumn() <= endCol) {
+
+            CellRangeAddress newRegion = new CellRangeAddress(
+                region.getFirstRow() - startRow + destRow,
+                region.getLastRow() - startRow + destRow,
+                region.getFirstColumn() - startCol + destCol,
+                region.getLastColumn() - startCol + destCol
+            );
+
+            if (!isRegionAlreadyPresent(destSheet, newRegion)) {
+                destSheet.addMergedRegion(newRegion);
+            }
+        }
+    }
+}
+
+private static boolean isRegionAlreadyPresent(Sheet sheet, CellRangeAddress newRegion) {
+    for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+        if (sheet.getMergedRegion(i).equals(newRegion)) {
+            return true;
+        }
+    }
+    return false;
+}
