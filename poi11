@@ -1,0 +1,11 @@
+private static void shiftRowsUp(Sheet sheet, int startRow, int endRow, int n) {
+    if (startRow < 0 || endRow < 0) {
+        System.out.printf("⚠️ Skipping shiftRowsUp: startRow=%d, endRow=%d%n", startRow, endRow);
+        return;
+    }
+    if (endRow < startRow) {
+        System.out.printf("⚠️ Skipping shiftRowsUp: invalid range startRow=%d, endRow=%d%n", startRow, endRow);
+        return;
+    }
+    sheet.shiftRows(startRow, endRow, -n);
+}
