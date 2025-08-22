@@ -1,0 +1,110 @@
+/**
+ * Copy a rectangular cell range from one sheet to another.
+ * Includes values, styles, formulas, row heights, and merged regions.
+ *
+ * @param srcSheet   Source sheet
+ * @param startRow   Top row index in source
+ * @param startCol   Left column index in source
+ * @param endRow     Bottom row index in source
+ * @param endCol     Right column index in source
+ * @param destSheet  Destination sheet
+ * @param destRow    Top row index in destination
+ * @param destCol    Left column index in destination
+ * @param copyStyle  Whether to copy cell styles
+ */
+private static void copyRange(Sheet srcSheet, int startRow, int startCol,
+                              int endRow, int endCol,
+                              Sheet destSheet, int destRow, int destCol,
+                              boolean copyStyle) {
+
+    Workbook wb = srcSheet.getWorkbook();
+
+    for (int i = 0; i <= (endRow - startRow); i++) {
+        Row srcRow = srcSheet.getRow(startRow + i);
+        Row destRow = destSheet.getRow(destRow + i);
+        if (destRow == null) destRow = destSheet.createRow(destRow + i);
+
+        if (srcRow != null) {
+            // Copy row height
+            destRow.setHeight(srcRow.getHeight());
+
+            for (int j = 0; j <= (endCol - startCol); j++) {
+                Cell srcCell = srcRow.getCell(startCol + j);
+                Cell destCell = destRow.getCell(destCol + j);
+                if (destCell == null) destCell = destRow.createCell(destCol + j);
+
+                if (srcCell != null) {
+                    copyCell(srcCell, destCell, wb, copyStyle);
+                }
+            }
+        }
+    }
+
+    // Copy merged regions in the range
+    copyMergedRegions(srcSheet, startRow, endRow, startCol, endCol, destSheet, destRow, destCol);
+}
+
+/**
+ * Copy a single cell (value, style, formula).
+ */
+private static void copyCell(Cell srcCell, Cell destCell, Workbook wb, boolean copyStyle) {
+    if (copyStyle) {
+        CellStyle newStyle = wb.createCellStyle();
+        newStyle.cloneStyleFrom(srcCell.getCellStyle());
+        destCell.setCellStyle(newStyle);
+    }
+
+    switch (srcCell.getCellType()) {
+        case STRING -> destCell.setCellValue(srcCell.getStringCellValue());
+        case NUMERIC -> {
+            if (DateUtil.isCellDateFormatted(srcCell)) {
+                destCell.setCellValue(srcCell.getDateCellValue());
+            } else {
+                destCell.setCellValue(srcCell.getNumericCellValue());
+            }
+        }
+        case BOOLEAN -> destCell.setCellValue(srcCell.getBooleanCellValue());
+        case FORMULA -> destCell.setCellFormula(srcCell.getCellFormula());
+        case BLANK -> destCell.setBlank();
+        default -> {}
+    }
+}
+
+/**
+ * Copy merged regions in a given range, skipping duplicates.
+ */
+private static void copyMergedRegions(Sheet srcSheet, int startRow, int endRow,
+                                      int startCol, int endCol,
+                                      Sheet destSheet, int destRow, int destCol) {
+
+    for (int i = 0; i < srcSheet.getNumMergedRegions(); i++) {
+        CellRangeAddress region = srcSheet.getMergedRegion(i);
+
+        if (region.getFirstRow() >= startRow && region.getLastRow() <= endRow &&
+            region.getFirstColumn() >= startCol && region.getLastColumn() <= endCol) {
+
+            CellRangeAddress newRegion = new CellRangeAddress(
+                region.getFirstRow() - startRow + destRow,
+                region.getLastRow() - startRow + destRow,
+                region.getFirstColumn() - startCol + destCol,
+                region.getLastColumn() - startCol + destCol
+            );
+
+            if (!isRegionAlreadyPresent(destSheet, newRegion)) {
+                destSheet.addMergedRegion(newRegion);
+            }
+        }
+    }
+}
+
+/**
+ * Check if a merged region already exists in the sheet.
+ */
+private static boolean isRegionAlreadyPresent(Sheet sheet, CellRangeAddress newRegion) {
+    for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+        if (sheet.getMergedRegion(i).equals(newRegion)) {
+            return true;
+        }
+    }
+    return false;
+}
