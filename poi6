@@ -1,0 +1,35 @@
+/**
+ * Copy a rectangular cell range from one sheet to another.
+ * Includes values, styles, formulas, row heights, and merged regions.
+ */
+private static void copyRange(Sheet srcSheet, int startRow, int startCol,
+                              int endRow, int endCol,
+                              Sheet destSheet, int destStartRow, int destStartCol,
+                              boolean copyStyle) {
+
+    Workbook wb = srcSheet.getWorkbook();
+
+    for (int i = 0; i <= (endRow - startRow); i++) {
+        Row srcRow = srcSheet.getRow(startRow + i);
+        Row destRowObj = destSheet.getRow(destStartRow + i);
+        if (destRowObj == null) destRowObj = destSheet.createRow(destStartRow + i);
+
+        if (srcRow != null) {
+            // Copy row height
+            destRowObj.setHeight(srcRow.getHeight());
+
+            for (int j = 0; j <= (endCol - startCol); j++) {
+                Cell srcCell = srcRow.getCell(startCol + j);
+                Cell destCell = destRowObj.getCell(destStartCol + j);
+                if (destCell == null) destCell = destRowObj.createCell(destStartCol + j);
+
+                if (srcCell != null) {
+                    copyCell(srcCell, destCell, wb, copyStyle);
+                }
+            }
+        }
+    }
+
+    // Copy merged regions inside the range
+    copyMergedRegions(srcSheet, startRow, endRow, startCol, endCol, destSheet, destStartRow, destStartCol);
+}
