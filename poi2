@@ -1,0 +1,344 @@
+// ============================================= // Chunk 1/6: Imports, helpers, and class header // ============================================= import org.apache.poi.ss.usermodel.; import org.apache.poi.xssf.usermodel.XSSFWorkbook; import org.apache.poi.ss.util.CellRangeAddress; import java.io.; import java.util.*;
+
+@SuppressWarnings("unused") public void createOSHA300FormsExcel(ExcelInputVO dataVO, String filePath, ResultVO customLabelResultVO, String configPath) throws Exception { // NOTE: This is a logic-preserving rewrite from F1J to Apache POI (XLSX) // It follows the same variables, control-flow and formulas as closely // as possible, replacing F1J calls with POI equivalents.
+
+// --------------- Constants from original method ---------------
+int SHEET_300_EXCEL_BASE_ROW = 24;  // base row where entries start
+String NO_DESC = "No Description";
+final String EXCEL_SIGN = "x";     // used in the original for marking
+
+// Helpers
+class PoiCopyMode { static final int VALUES_AND_STYLES = 1; static final int VALUES_ONLY = 2; }
+
+// Create workbook from .xlsx template (template300.xlsx)
+String templatePath = configPath + "template300.xlsx";
+try (FileInputStream fis = new FileInputStream(templatePath);
+     XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
+
+    // ------------------------ Chunk 2/6: Setup ------------------------
+    // Sheets
+    int numSheetsAtLoad = workbook.getNumberOfSheets();
+    Sheet form300 = workbook.getSheetAt(0);
+    workbook.setSheetName(0, "Form300");
+
+    // Subtotal sheet is last (as in original)
+    int subTotalSheetIndex = workbook.getNumberOfSheets() - 1;
+    Sheet subTotalSheet = workbook.getSheetAt(subTotalSheetIndex);
+    int rowBaseOfSubTotal = 1; // original value
+
+    // Add an append/temp sheet at the end (used for format buffering)
+    int appendSheetIndex = workbook.getNumberOfSheets();
+    Sheet tmp = workbook.createSheet("__tmp_copy_buffer__");
+
+    int rowCount = dataVO.getNumberOfRows();
+    int excelCurrRow = SHEET_300_EXCEL_BASE_ROW;
+    boolean isMorePage = false;
+    int blankLineCount = 0;
+
+    // Read some row heights from template rows (rows 24..35) on sheet 0
+    short rowHeight_24 = getRowHeight(form300, 24);
+    short rowHeight_25 = getRowHeight(form300, 25);
+    short rowHeight_26 = getRowHeight(form300, 26);
+    short rowHeight_27 = getRowHeight(form300, 27);
+    short rowHeight_28 = getRowHeight(form300, 28);
+    short rowHeight_29 = getRowHeight(form300, 29);
+    short rowHeight_30 = getRowHeight(form300, 30);
+    short rowHeight_31 = getRowHeight(form300, 31);
+    short rowHeight_32 = getRowHeight(form300, 32);
+    short rowHeight_33 = getRowHeight(form300, 33);
+    short rowHeight_34 = getRowHeight(form300, 34);
+    short rowHeight_35 = getRowHeight(form300, 35);
+
+    // Mirror the row heights on tmp sheet rows 0..11
+    setRowHeight(tmp, 0, rowHeight_24);
+    setRowHeight(tmp, 1, rowHeight_25);
+    setRowHeight(tmp, 2, rowHeight_26);
+    setRowHeight(tmp, 3, rowHeight_27);
+    setRowHeight(tmp, 4, rowHeight_28);
+    setRowHeight(tmp, 5, rowHeight_29);
+    setRowHeight(tmp, 6, rowHeight_30);
+    setRowHeight(tmp, 7, rowHeight_31);
+    setRowHeight(tmp, 8, rowHeight_32);
+    setRowHeight(tmp, 9, rowHeight_33);
+    setRowHeight(tmp, 10, rowHeight_34);
+    setRowHeight(tmp, 11, rowHeight_35);
+
+    // Copy the BASE row template block (24..24, col 0..23) to tmp row 0..0
+    copyRange(form300, 24, 24, 0, 23, tmp, 0, 0, PoiCopyMode.VALUES_AND_STYLES);
+    // Copy the bottom pagination block (25..35, col 0..23) to tmp rows 1..11
+    copyRange(form300, 25, 35, 0, 23, tmp, 1, 0, PoiCopyMode.VALUES_AND_STYLES);
+
+    // ----------------- Chunk 3/6: Header labels (DLDS) -----------------
+    // Custom labels to be placed at row indices 18..22 in column starting at 18
+    int firstDLDSColumnPosition = 18;
+    @SuppressWarnings("unchecked")
+    ArrayList<IValueObject> customLabelsList = (ArrayList<IValueObject>) customLabelResultVO.getRows(0);
+
+    // Build a style roughly equivalent to: vertical align bottom + wrap
+    CellStyle dldsHeaderStyle = workbook.createCellStyle();
+    dldsHeaderStyle.setVerticalAlignment(VerticalAlignment.BOTTOM);
+    dldsHeaderStyle.setWrapText(true);
+    for (int q = 0; q < 6 && q < customLabelsList.size(); q++) {
+        CustomLabelOutputVO locVO = (CustomLabelOutputVO) customLabelsList.get(q);
+        int r = 18 + q; // rows 18..23 inclusive in template
+        Cell cell = getOrCreateCell(form300, r, firstDLDSColumnPosition);
+        cell.setCellValue(locVO.getIQSRLabel());
+        cell.setCellStyle(dldsHeaderStyle);
+        firstDLDSColumnPosition++;
+    }
+
+    // -------------------- Chunk 4/6: Main data loop --------------------
+    int pageNumber = 0;
+    int rowNumber = 0, pageSize = 10;
+    int tmpRowBase = 20; // base row on tmp used by original logic
+
+    CellStyle leftAlign = workbook.createCellStyle();
+    leftAlign.setAlignment(HorizontalAlignment.LEFT);
+    leftAlign.setVerticalAlignment(VerticalAlignment.TOP);
+
+    CellStyle wrapLeft = workbook.createCellStyle();
+    wrapLeft.setAlignment(HorizontalAlignment.LEFT);
+    wrapLeft.setVerticalAlignment(VerticalAlignment.TOP);
+    wrapLeft.setWrapText(true);
+
+    for (int rowPos = 0; rowPos < rowCount; rowPos++) {
+        Object row_ = dataVO.get(rowPos);
+        if (row_ instanceof List<?>) {
+            List<?> row = (List<?>) row_;
+            String tmpStr;
+            int tmpInt;
+
+            String strBranch, strCase, strSymbol, strDeptName, strClaimt, strLossDate, strNatureInj, strInjDesc,
+                    strCauseCode, strBodyPartDesc, strDeathDate, strOccupation, strLossDays, strJobTitle,
+                    strInjuryIllnessDesc, strAccidentLocationText, strOutcomeCode, strDaysAwayFromWork,
+                    strRestrictedDays, strInjIllnessType;
+            String strDiv, strLoc, strDept, strSec, strLevel5 = "", strLevel6 = "", strDivNm = "",
+                    strLocNm = "", strDeptNm = "", strSecNm = "", strLevel5Nm = "", strLevel6Nm = "";
+
+            tmpStr = "000" + (String) row.get(0);
+            strBranch = tmpStr.substring(tmpStr.length() - 3);
+
+            tmpStr = "000000" + (String) row.get(1);
+            strCase = tmpStr.substring(tmpStr.length() - 6);
+
+            tmpStr = "000" + (String) row.get(2);
+            strSymbol = tmpStr.substring(tmpStr.length() - 3);
+
+            strClaimt = Utilities.getString((String) row.get(4));
+            strLossDate = Utilities.getString((String) row.get(5));
+            strNatureInj = Utilities.getString((String) row.get(6));
+            strInjDesc = Utilities.getString((String) row.get(7));
+            strCauseCode = Utilities.getString((String) row.get(8));
+            strBodyPartDesc = Utilities.getString((String) row.get(9));
+            strDeathDate = Utilities.getString((String) row.get(10));
+            strOccupation = Utilities.getString((String) row.get(13));
+            strLossDays = Utilities.getString((String) row.get(15));
+            strJobTitle = Utilities.getString((String) row.get(16));
+            strInjuryIllnessDesc = Utilities.getString((String) row.get(17));
+            if (strInjuryIllnessDesc.equals("")) {
+                if (!strInjDesc.equals("")) strInjuryIllnessDesc = strInjDesc;
+                else strInjuryIllnessDesc = strNatureInj + "- DESC N/A";
+            }
+            strAccidentLocationText = Utilities.getString((String) row.get(18));
+            strOutcomeCode = Utilities.getString((String) row.get(19));
+            strDaysAwayFromWork = Utilities.getString((String) row.get(20));
+            strRestrictedDays = Utilities.getString((String) row.get(21));
+            strInjIllnessType = Utilities.getString((String) row.get(22));
+
+            strDiv = Utilities.getString((String) row.get(23));
+            strLoc = Utilities.getString((String) row.get(24));
+            strDept = Utilities.getString((String) row.get(25));
+            strSec = Utilities.getString((String) row.get(26));
+            strLevel5 = Utilities.getString((String) row.get(27));
+            strLevel6 = Utilities.getString((String) row.get(28));
+            strDivNm = Utilities.getString((String) row.get(29));
+            strLocNm = Utilities.getString((String) row.get(30));
+            strDeptNm = Utilities.getString((String) row.get(31));
+            strSecNm = Utilities.getString((String) row.get(32));
+            strLevel5Nm = Utilities.getString((String) row.get(33));
+            strLevel6Nm = Utilities.getString((String) row.get(34));
+
+            strDeptName = strLevel6Nm;
+            if (strDeptName.equals("") || strDeptName.equalsIgnoreCase(NO_DESC)) strDeptName = strLevel5Nm;
+            if (strDeptName.equals("") || strDeptName.equalsIgnoreCase(NO_DESC)) strDeptName = strLevel5Nm;
+            if (strDeptName.equals("") || strDeptName.equalsIgnoreCase(NO_DESC)) strDeptName = strSecNm;
+            if (strDeptName.equals("") || strDeptName.equalsIgnoreCase(NO_DESC)) strDeptName = strDeptNm;
+            if (strDeptName.equals("") || strDeptName.equalsIgnoreCase(NO_DESC)) strDeptName = strLocNm;
+            if (strDeptName.equals("") || strDeptName.equalsIgnoreCase(NO_DESC)) strDeptName = strDivNm;
+
+            String strBranchCaseSymbol = strBranch + "-" + strCase + "-" + strSymbol;
+
+            // Write cells to form300 at excelCurrRow
+            setString(form300, excelCurrRow, 0, strBranchCaseSymbol, leftAlign);
+            setString(form300, excelCurrRow, 1, strClaimt, leftAlign);
+            String jobTitleOrOcc = (strJobTitle.equals("") || strJobTitle.equals(" ")) ? strOccupation : strJobTitle;
+            setString(form300, excelCurrRow, 2, jobTitleOrOcc, leftAlign);
+            setString(form300, excelCurrRow, 3, strLossDate, null);
+
+            // Column 5: Where event occurred
+            String currAccidentLoc = strDeptName;
+            if (!strAccidentLocationText.equals("")) currAccidentLoc = strAccidentLocationText;
+            else if (!strLocNm.equals("")) currAccidentLoc = strLocNm;
+            setString(form300, excelCurrRow, 4, currAccidentLoc, leftAlign);
+
+            // Column 6: Injury/Illness Description (wrap)
+            setString(form300, excelCurrRow, 5, strInjuryIllnessDesc, wrapLeft);
+            // Simulate auto-height by resetting to default height (POI cannot fully auto-calc row height)
+            getOrCreateRow(form300, excelCurrRow).setHeight((short) -1);
+
+            // Illness type classification marks (cols 12..17)
+            // Original also had a fallback using strNatureInj if strInjIllnessType not in 0..5
+            boolean markedByType = true;
+            switch (strInjIllnessType) {
+                case "0": setString(form300, excelCurrRow, 12, EXCEL_SIGN, null); break; // Injury
+                case "1": setString(form300, excelCurrRow, 13, EXCEL_SIGN, null); break; // Skin
+                case "2": setString(form300, excelCurrRow, 14, EXCEL_SIGN, null); break; // Respiratory
+                case "3": setString(form300, excelCurrRow, 15, EXCEL_SIGN, null); break; // Poisoning
+                case "4": setString(form300, excelCurrRow, 16, EXCEL_SIGN, null); break; // Hearing
+                case "5": setString(form300, excelCurrRow, 17, EXCEL_SIGN, null); break; // Other
+                default: markedByType = false; break;
+            }
+            if (!markedByType) {
+                String illnessInd = "";
+                if (strNatureInj.length() > 0) {
+                    illnessInd = strNatureInj;
+                    String[] injuryCodesOSHA = {
+                        "DMS",
+                        "ABR","BLR","BYR","RCR","SIR",
+                        "CPP","PMP","POP","ERP",
+                        "HLH","HCH","HDH",
+                        "5HA","OOA","CNA","CDA","OLA"
+                    };
+                    String injGroup = "";
+                    for (String injCD : injuryCodesOSHA) {
+                        if (injCD.startsWith(illnessInd)) { injGroup = injCD.substring(2); break; }
+                    }
+                    switch (injGroup) {
+                        case "S": setString(form300, excelCurrRow, 13, EXCEL_SIGN, null); break;
+                        case "R": setString(form300, excelCurrRow, 14, EXCEL_SIGN, null); break;
+                        case "P": setString(form300, excelCurrRow, 15, EXCEL_SIGN, null); break;
+                        case "H": setString(form300, excelCurrRow, 16, EXCEL_SIGN, null); break;
+                        case "A": setString(form300, excelCurrRow, 17, EXCEL_SIGN, null); break;
+                        default:   setString(form300, excelCurrRow, 12, EXCEL_SIGN, null); break; // Injury
+                    }
+                }
+            }
+
+            // Outcome columns 6..11 and numbers 10..11
+            if ("0".equals(strOutcomeCode)) {
+                setString(form300, excelCurrRow, 6, EXCEL_SIGN, null); // Death
+            } else if ("1".equals(strOutcomeCode)) {
+                setString(form300, excelCurrRow, 7, EXCEL_SIGN, null); // Days away from work
+                setString(form300, excelCurrRow, 10, strDaysAwayFromWork, null);
+                setString(form300, excelCurrRow, 11, strRestrictedDays, null);
+            } else if ("2".equals(strOutcomeCode)) {
+                setString(form300, excelCurrRow, 8, EXCEL_SIGN, null); // Job transfer or restriction
+                setString(form300, excelCurrRow, 11, strRestrictedDays, null);
+            } else if ("3".equals(strOutcomeCode)
+                    || "0".equals(strInjIllnessType) || "1".equals(strInjIllnessType)
+                    || "2".equals(strInjIllnessType) || "3".equals(strInjIllnessType)
+                    || "4".equals(strInjIllnessType) || "5".equals(strInjIllnessType)) {
+                setString(form300, excelCurrRow, 9, EXCEL_SIGN, null); // Other recordable cases
+            } else {
+                // legacy fallback logic using death date and loss days
+                if (strDeathDate != null && strDeathDate.length() >= 4) {
+                    String yyyy = strDeathDate.substring(0, 4);
+                    try { tmpInt = Integer.parseInt(yyyy); } catch (NumberFormatException nfe) { tmpInt = 9999; }
+                    if (tmpInt < 9999) setString(form300, excelCurrRow, 6, EXCEL_SIGN, null);
+                }
+                try { tmpInt = Integer.parseInt(strLossDays); } catch (NumberFormatException nfe) { tmpInt = 0; }
+                if (tmpInt > 0) {
+                    setString(form300, excelCurrRow, 7, EXCEL_SIGN, null);
+                    setString(form300, excelCurrRow, 10, "", null);
+                }
+            }
+
+            // Right-align DLDS columns 18..23 is approximated by setting a style
+            CellStyle rightAlign = workbook.createCellStyle();
+            rightAlign.setAlignment(HorizontalAlignment.RIGHT);
+            for (int c = 18; c <= 23; c++) {
+                Cell dc = getOrCreateCell(form300, excelCurrRow, c);
+                dc.setCellStyle(rightAlign);
+            }
+            setString(form300, excelCurrRow, 18, strDiv, rightAlign);
+            setString(form300, excelCurrRow, 19, strLoc, rightAlign);
+            setString(form300, excelCurrRow, 20, strDept, rightAlign);
+            setString(form300, excelCurrRow, 21, strSec, rightAlign);
+            setString(form300, excelCurrRow, 22, strLevel5, rightAlign);
+            setString(form300, excelCurrRow, 23, strLevel6, rightAlign);
+
+            rowNumber++;
+
+            // -------------- Page-size block handling (every 10 rows) --------------
+            if (rowNumber % pageSize == 0) {
+                if (rowNumber > 0) { isMorePage = true; blankLineCount++; }
+
+                // Copy tmp (formatted) block back into the current 10-row area (values only)
+                // Original: book.copyRange(appendSheetIndex,tmpRowBase,0,tmpRowBase + pageSize - 1,23,
+                //                          book,0,excelCurrRow,0,excelCurrRow + pageSize - 1,23, eCopyValues)
+                copyRange(tmp, tmpRowBase, tmpRowBase + pageSize - 1, 0, 23,
+                          form300, excelCurrRow, 0, PoiCopyMode.VALUES_ONLY);
+
+                // Clear and then reverse reorder the 10 rows using the tmp buffer
+                clearRange(form300, excelCurrRow, excelCurrRow + pageSize - 1, 0, 23);
+                for (int k = 0; k < pageSize; k++) {
+                    // book.copyRange(0,excelCurrRow + k,0,excelCurrRow + k,23,
+                    //                book,appendSheetIndex,tmpRowBase + pageSize - 1 - k,0, ..., eCopyValues)
+                    copyRange(form300, excelCurrRow + k, excelCurrRow + k, 0, 23,
+                              tmp, tmpRowBase + pageSize - 1 - k, 0, PoiCopyMode.VALUES_ONLY);
+                }
+
+                // Add page separator: set row heights for the 11 rows below the block
+                setRowHeight(form300, excelCurrRow + pageSize, rowHeight_25);
+                setRowHeight(form300, excelCurrRow + pageSize + 1, rowHeight_26);
+                setRowHeight(form300, excelCurrRow + pageSize + 2, rowHeight_27);
+                setRowHeight(form300, excelCurrRow + pageSize + 3, rowHeight_28);
+                setRowHeight(form300, excelCurrRow + pageSize + 4, rowHeight_29);
+                setRowHeight(form300, excelCurrRow + pageSize + 5, rowHeight_30);
+                setRowHeight(form300, excelCurrRow + pageSize + 6, rowHeight_31);
+                setRowHeight(form300, excelCurrRow + pageSize + 7, rowHeight_32);
+                setRowHeight(form300, excelCurrRow + pageSize + 8, rowHeight_33);
+                setRowHeight(form300, excelCurrRow + pageSize + 9, rowHeight_34);
+                setRowHeight(form300, excelCurrRow + pageSize + 10, rowHeight_35);
+
+                // Copy the bottom pagination area from tmp rows 1..12 to sheet
+                copyRange(tmp, 1, 12, 0, 23,
+                          form300, excelCurrRow + pageSize, 0, PoiCopyMode.VALUES_AND_STYLES);
+
+                pageNumber++;
+
+                // ------ Subtotal formulas (columns 71..82 => 'G'.. 'R' 0-based to letters) ------
+                int pBegin = excelCurrRow + 1;
+                int pEnd = excelCurrRow + pageSize;
+                int columnLocation = 6; // starting column on the sheet
+                int subTotalColumnLocation = 0;
+                int formulaRow = pEnd;
+                for (int colCode = 71; colCode < 83; colCode++) {
+                    char colLetter = (char) colCode; // same as original
+                    String tmpFormula;
+                    if (colCode == 75 || colCode == 76) {
+                        tmpFormula = "SUM(" + colLetter + pBegin + ":" + colLetter + pEnd + ")";
+                    } else {
+                        tmpFormula = "COUNTIF(" + colLetter + pBegin + ":" + colLetter + pEnd + ",\"x\")";
+                    }
+                    String tmpFormulaSubTotal = "Form300!" + colLetter + (pEnd + 1);
+
+                    setFormula(form300, formulaRow, columnLocation++, tmpFormula);
+                    setFormula(subTotalSheet, 0, subTotalColumnLocation++, tmpFormulaSubTotal);
+                }
+
+                // Footer text: "pageNumber of (rowCount/pageSize+1)" at (excelCurrRow + pageSize + 8, 10)
+                setString(form300, excelCurrRow + pageSize + 8, 10,
+                          pageNumber + " of " + (rowCount / pageSize + 1), null);
+
+                excelCurrRow = excelCurrRow + pageSize + 12; // move to next block start
+
+                // Insert a new row at top of subtotal sheet to match original behavior
+                shiftRowsDown(subTotalSheet, 0, subTotalSheet.getLastRowNum(), 1);
+                rowBaseOfSubTotal++;
+            }
+
+            // Insert a new row at current position with template formatting from tmp row 0
+            shiftRowsDown(form300, excelCurrRow, form300.getLastRowNum(), 1);
+            setRowHeight(form300, excelCurrRow, (short) 330);
+            copyRange(tmp, 0, 0, 0, 23, form300, excelCurrRow, 0, PoiCopyMode.VALUES_AND_STYLES);
