@@ -1,0 +1,205 @@
+// Insert a new row at current position with template formatting from tmp row 0
+                shiftRowsDown(form300, excelCurrRow, form300.getLastRowNum(), 1);
+                setRowHeight(form300, excelCurrRow, (short) 330);
+                copyRange(tmp, 0, 0, 0, 23, form300, excelCurrRow, 0, PoiCopyMode.VALUES_AND_STYLES);
+            }
+        }
+
+        // -------------------- Chunk 5/6: Trailing page & totals --------------------
+        // Remove the extra inserted blank current row (deleteRange in F1J)
+        // In POI: we simulate by shifting rows up by 1 starting at excelCurrRow
+        shiftRowsUp(form300, excelCurrRow, form300.getLastRowNum(), 1);
+
+        int lastedRowNumber = rowCount % pageSize;
+        if (lastedRowNumber != 0) {
+            // Reorder rows
+            copyRange(tmp, tmpRowBase, tmpRowBase + lastedRowNumber - 1, 0, 23,
+                      form300, excelCurrRow, 0, PoiCopyMode.VALUES_ONLY);
+
+            clearRange(form300, excelCurrRow, excelCurrRow + lastedRowNumber - 1, 0, 23);
+
+            for (int k = 0; k < lastedRowNumber; k++) {
+                copyRange(form300, excelCurrRow + k, excelCurrRow + k, 0, 23,
+                          tmp, tmpRowBase + lastedRowNumber - 1 - k, 0, PoiCopyMode.VALUES_ONLY);
+            }
+
+            setRowHeight(form300, excelCurrRow + lastedRowNumber, rowHeight_25);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 1, rowHeight_26);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 2, rowHeight_27);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 3, rowHeight_28);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 4, rowHeight_29);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 5, rowHeight_30);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 6, rowHeight_31);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 7, rowHeight_32);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 8, rowHeight_33);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 9, rowHeight_34);
+            setRowHeight(form300, excelCurrRow + lastedRowNumber + 10, rowHeight_35);
+
+            // Copy bottom pagination for the final (partial) page
+            copyRange(tmp, 1, 11, 0, 23,
+                      form300, excelCurrRow + lastedRowNumber, 0, PoiCopyMode.VALUES_AND_STYLES);
+
+            // Subtotal formulas for the final page
+            int pBegin = excelCurrRow + 1;
+            int pEnd = excelCurrRow + lastedRowNumber;
+            int columnLocation = 6;
+            int subTotalColumnLocation = 0;
+            int formulaRow = pEnd;
+            for (int colCode = 71; colCode < 83; colCode++) {
+                char colLetter = (char) colCode;
+                String tmpFormula;
+                if (colCode == 75 || colCode == 76) {
+                    tmpFormula = "SUM(" + colLetter + pBegin + ":" + colLetter + pEnd + ")";
+                } else {
+                    tmpFormula = "COUNTIF(" + colLetter + pBegin + ":" + colLetter + pEnd + ",\"x\")";
+                }
+                String tmpFormulaSubTotal = "Form300!" + colLetter + (pEnd + 1);
+                setFormula(form300, formulaRow, columnLocation++, tmpFormula);
+                setFormula(subTotalSheet, 0, subTotalColumnLocation++, tmpFormulaSubTotal);
+            }
+        }
+
+        // Overall subtotal row on subtotal sheet (columns 65..76 => 'A'..'L')
+        int subTotalColumnLocation = 0;
+        for (int j = 65; j < 77; j++) {
+            char col = (char) j;
+            String tmpSubTotal = "SUM(" + col + "1:" + col + rowBaseOfSubTotal + ")";
+            setFormula(subTotalSheet, rowBaseOfSubTotal, subTotalColumnLocation++, tmpSubTotal);
+        }
+
+        // Footer page text for final page
+        int pageNumberFinal = (rowCount % pageSize == 0) ? (rowCount / pageSize) : (rowCount / pageSize + 1);
+        setString(form300, excelCurrRow + lastedRowNumber + 8, 10,
+                  pageNumberFinal + " of " + (rowCount / pageSize + 1), null);
+
+        // Delete the tmp sheet
+        int tmpIndex = workbook.getSheetIndex(tmp);
+        workbook.removeSheetAt(tmpIndex);
+
+        // If isMorePage, delete the leading blank lines (shift rows up)
+        if (isMorePage && blankLineCount > 0) {
+            shiftRowsUp(form300, 0, 0 + (blankLineCount - 1), (short) 1);
+        }
+
+        // --------------- Page breaks and print area (Chunk 6/6) ---------------
+        int pageBreakRow = 0;
+        int printBegin = 25;
+        int pageSizeRows = 21; // as used implicitly in original pagination math
+        pageBreakRow = pageSize;
+        for (int k = 0; k < pageNumberFinal; k++) {
+            pageBreakRow += pageSizeRows;
+            form300.setRowBreak(pageBreakRow);
+        }
+        int printEnd = printBegin + pageBreakRow;
+        String printFormula = "$A$" + printBegin + ":$R$" + (printEnd - 21);
+        int formIndex = workbook.getSheetIndex(form300);
+        workbook.setPrintArea(formIndex, printFormula);
+        form300.removeRowBreak(36);
+
+        // Recalculate formulas to mimic book.recalc();
+        FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+        evaluator.evaluateAll();
+
+        // Final sheet name per original
+        workbook.setSheetName(formIndex, "OSHA Form 300");
+
+        // Write to file
+        try (FileOutputStream out = new FileOutputStream(filePath)) {
+            workbook.write(out);
+        }
+    }
+}
+
+// ---------------------- Helper Methods (POI) ----------------------
+private static Row getOrCreateRow(Sheet sheet, int rowIndex) {
+    Row r = sheet.getRow(rowIndex);
+    if (r == null) r = sheet.createRow(rowIndex);
+    return r;
+}
+private static Cell getOrCreateCell(Sheet sheet, int rowIndex, int colIndex) {
+    Row r = getOrCreateRow(sheet, rowIndex);
+    Cell c = r.getCell(colIndex);
+    if (c == null) c = r.createCell(colIndex);
+    return c;
+}
+private static void setString(Sheet sheet, int row, int col, String val, CellStyle style) {
+    Cell c = getOrCreateCell(sheet, row, col);
+    c.setCellValue(val == null ? "" : val);
+    if (style != null) c.setCellStyle(style);
+}
+private static void setFormula(Sheet sheet, int row, int col, String formula) {
+    Cell c = getOrCreateCell(sheet, row, col);
+    c.setCellFormula(formula);
+}
+private static short getRowHeight(Sheet sheet, int rowIndex) {
+    Row r = sheet.getRow(rowIndex);
+    return (r == null) ? sheet.getDefaultRowHeight() : r.getHeight();
+}
+private static void setRowHeight(Sheet sheet, int rowIndex, short height) {
+    Row r = getOrCreateRow(sheet, rowIndex);
+    r.setHeight(height);
+}
+private static void clearRange(Sheet sheet, int r1, int r2, int c1, int c2) {
+    for (int r = r1; r <= r2; r++) {
+        Row row = getOrCreateRow(sheet, r);
+        for (int c = c1; c <= c2; c++) {
+            Cell cell = row.getCell(c);
+            if (cell != null) {
+                row.removeCell(cell);
+            }
+        }
+    }
+}
+private static void copyRange(Sheet src, int srcRow1, int srcRow2, int srcCol1, int srcCol2,
+                              Sheet dst, int dstRow1, int dstCol1, int mode) {
+    Workbook wb = src.getWorkbook();
+    int rowCount = srcRow2 - srcRow1 + 1;
+    int colCount = srcCol2 - srcCol1 + 1;
+    for (int i = 0; i < rowCount; i++) {
+        Row sRow = src.getRow(srcRow1 + i);
+        Row dRow = getOrCreateRow(dst, dstRow1 + i);
+        if (sRow != null) dRow.setHeight(sRow.getHeight());
+        for (int j = 0; j < colCount; j++) {
+            Cell sCell = (sRow == null) ? null : sRow.getCell(srcCol1 + j);
+            Cell dCell = getOrCreateCell(dst, dstRow1 + i, dstCol1 + j);
+            if (sCell == null) { dRow.removeCell(dCell); continue; }
+            if (mode == 1) { // VALUES_AND_STYLES
+                CellStyle newStyle = wb.createCellStyle();
+                newStyle.cloneStyleFrom(sCell.getCellStyle());
+                dCell.setCellStyle(newStyle);
+            }
+            switch (sCell.getCellType()) {
+                case STRING -> dCell.setCellValue(sCell.getStringCellValue());
+                case NUMERIC -> {
+                    if (DateUtil.isCellDateFormatted(sCell)) dCell.setCellValue(sCell.getDateCellValue());
+                    else dCell.setCellValue(sCell.getNumericCellValue());
+                }
+                case BOOLEAN -> dCell.setCellValue(sCell.getBooleanCellValue());
+                case FORMULA -> dCell.setCellFormula(sCell.getCellFormula());
+                case BLANK -> dCell.setBlank();
+                default -> {}
+            }
+        }
+    }
+    // copy merged regions within range
+    for (int i = 0; i < src.getNumMergedRegions(); i++) {
+        CellRangeAddress region = src.getMergedRegion(i);
+        if (region.getFirstRow() >= srcRow1 && region.getLastRow() <= srcRow2 &&
+            region.getFirstColumn() >= srcCol1 && region.getLastColumn() <= srcCol2) {
+            int r1 = dstRow1 + (region.getFirstRow() - srcRow1);
+            int r2 = dstRow1 + (region.getLastRow() - srcRow1);
+            int c1 = dstCol1 + (region.getFirstColumn() - srcCol1);
+            int c2 = dstCol1 + (region.getLastColumn() - srcCol1);
+            CellRangeAddress newReg = new CellRangeAddress(r1, r2, c1, c2);
+            dst.addMergedRegion(newReg);
+        }
+    }
+}
+private static void shiftRowsDown(Sheet sheet, int startRow, int endRow, int n) {
+    if (endRow < startRow) return;
+    sheet.shiftRows(startRow, endRow, n, true, false);
+}
+private static void shiftRowsUp(Sheet sheet, int startRow, int endRow, int n) {
+    if (endRow < startRow) return;
+    sheet.shiftRows(startRow, endRow, -n, true, false);
+}
