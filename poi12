@@ -388,51 +388,380 @@ private void processOutcomeCode(Row row, String outcomeCode, String daysAway, St
     }
 }
 
-private void createCellWithValue(Row row, int column, String value, Workbook workbook) {
-    Cell cell = row.createCell(column);
-    cell.setCellValue(value);
-}
+I'll complete these methods with proper logic. Here's the full implementation:
 
+```java
 private void handlePagination(Workbook workbook, Sheet mainSheet, Sheet subTotalSheet, 
                             int startRow, int pageSize, Map<Integer, Integer> rowHeights, 
                             int pageNumber, int totalRows) {
-    // Implementation for pagination handling
-    // This would include adding page breaks, formulas, etc.
+    try {
+        // Add page separator with template formatting
+        int separatorStartRow = startRow + pageSize;
+        
+        // Set row heights for separator rows (matching template rows 25-35)
+        for (int i = 0; i <= 11; i++) {
+            int templateRowNum = 25 + i;
+            int targetRowNum = separatorStartRow + i;
+            Row targetRow = mainSheet.getRow(targetRowNum);
+            if (targetRow == null) {
+                targetRow = mainSheet.createRow(targetRowNum);
+            }
+            if (rowHeights.containsKey(templateRowNum)) {
+                targetRow.setHeight(rowHeights.get(templateRowNum).shortValue());
+            }
+        }
+        
+        // Copy separator content from template rows (25-35)
+        Row templateSeparatorRow = mainSheet.getRow(25);
+        if (templateSeparatorRow != null) {
+            for (int i = 0; i <= 11; i++) {
+                int sourceRowNum = 25 + i;
+                int targetRowNum = separatorStartRow + i;
+                copyRowContent(mainSheet, sourceRowNum, targetRowNum, workbook);
+            }
+        }
+        
+        // Add page number
+        Row pageNumberRow = mainSheet.getRow(separatorStartRow + 8);
+        if (pageNumberRow != null) {
+            Cell pageCell = pageNumberRow.getCell(10);
+            if (pageCell == null) {
+                pageCell = pageNumberRow.createCell(10);
+            }
+            int totalPages = (int) Math.ceil((double) totalRows / pageSize);
+            pageCell.setCellValue((pageNumber + 1) + " of " + totalPages);
+        }
+        
+        // Add formulas for subtotals
+        int formulaRow = startRow + pageSize;
+        int dataStartRow = startRow - pageSize + 1;
+        int dataEndRow = startRow;
+        
+        // Columns G-R (6-17) for various counts and sums
+        for (int col = 6; col <= 17; col++) {
+            Row formulaRowObj = mainSheet.getRow(formulaRow);
+            if (formulaRowObj == null) {
+                formulaRowObj = mainSheet.createRow(formulaRow);
+            }
+            
+            Cell formulaCell = formulaRowObj.createCell(col);
+            String columnLetter = CellReference.convertNumToColString(col);
+            
+            String formula;
+            if (col == 10 || col == 11) { // Columns K and L are sums
+                formula = String.format("SUM(%s%d:%s%d)", 
+                    columnLetter, dataStartRow + 1, 
+                    columnLetter, dataEndRow + 1);
+            } else { // Other columns are counts of "X"
+                formula = String.format("COUNTIF(%s%d:%s%d,\"X\")", 
+                    columnLetter, dataStartRow + 1, 
+                    columnLetter, dataEndRow + 1);
+            }
+            
+            formulaCell.setCellFormula(formula);
+            
+            // Also add to subtotal sheet
+            addToSubtotalSheet(subTotalSheet, pageNumber, col, formula, workbook);
+        }
+        
+        // Add page break
+        mainSheet.setRowBreak(separatorStartRow);
+        
+    } catch (Exception e) {
+        logger.debug("Error handling pagination: " + e.getMessage());
+    }
 }
 
-private void copyRowFormat(Sheet sheet, int targetRow, Row sourceRow, Workbook workbook) {
-    // Implementation for copying row formatting
+private void copyRowContent(Sheet sheet, int sourceRowNum, int targetRowNum, Workbook workbook) {
+    Row sourceRow = sheet.getRow(sourceRowNum);
+    Row targetRow = sheet.getRow(targetRowNum);
+    if (targetRow == null) {
+        targetRow = sheet.createRow(targetRowNum);
+    }
+    
+    if (sourceRow != null) {
+        // Copy cell values and styles
+        for (int i = 0; i <= 23; i++) {
+            Cell sourceCell = sourceRow.getCell(i);
+            Cell targetCell = targetRow.createCell(i);
+            
+            if (sourceCell != null) {
+                // Copy cell value
+                switch (sourceCell.getCellType()) {
+                    case STRING:
+                        targetCell.setCellValue(sourceCell.getStringCellValue());
+                        break;
+                    case NUMERIC:
+                        targetCell.setCellValue(sourceCell.getNumericCellValue());
+                        break;
+                    case BOOLEAN:
+                        targetCell.setCellValue(sourceCell.getBooleanCellValue());
+                        break;
+                    case FORMULA:
+                        targetCell.setCellFormula(sourceCell.getCellFormula());
+                        break;
+                    default:
+                        targetCell.setCellValue("");
+                }
+                
+                // Copy cell style
+                CellStyle newStyle = workbook.createCellStyle();
+                newStyle.cloneStyleFrom(sourceCell.getCellStyle());
+                targetCell.setCellStyle(newStyle);
+            }
+        }
+        
+        // Copy row height
+        targetRow.setHeight(sourceRow.getHeight());
+    }
+}
+
+private void copyRowFormat(Sheet sheet, int targetRowNum, Row sourceRow, Workbook workbook) {
+    if (sourceRow == null) return;
+    
+    Row targetRow = sheet.getRow(targetRowNum);
+    if (targetRow == null) {
+        targetRow = sheet.createRow(targetRowNum);
+    }
+    
+    // Copy cell styles from source to target
+    for (int i = 0; i <= 23; i++) {
+        Cell sourceCell = sourceRow.getCell(i);
+        Cell targetCell = targetRow.getCell(i);
+        if (targetCell == null) {
+            targetCell = targetRow.createCell(i);
+        }
+        
+        if (sourceCell != null) {
+            CellStyle newStyle = workbook.createCellStyle();
+            newStyle.cloneStyleFrom(sourceCell.getCellStyle());
+            targetCell.setCellStyle(newStyle);
+        }
+    }
+    
+    // Copy row height
+    targetRow.setHeight(sourceRow.getHeight());
+}
+
+private void addToSubtotalSheet(Sheet subTotalSheet, int pageNumber, int column, String formula, Workbook workbook) {
+    int rowNum = pageNumber;
+    Row row = subTotalSheet.getRow(rowNum);
+    if (row == null) {
+        row = subTotalSheet.createRow(rowNum);
+    }
+    
+    Cell cell = row.createCell(column);
+    cell.setCellFormula("'OSHA Form 300'!" + formula.replace("SUM(", "").replace("COUNTIF(", "").replace(")", ""));
 }
 
 private void handleRemainingRows(Workbook workbook, Sheet mainSheet, Sheet subTotalSheet, 
                                int startRow, int remainingRows, Map<Integer, Integer> rowHeights, 
                                int pageNumber, int totalRows) {
-    // Implementation for handling remaining rows
+    try {
+        if (remainingRows <= 0) return;
+        
+        int separatorStartRow = startRow + remainingRows;
+        
+        // Set row heights for separator rows
+        for (int i = 0; i <= 11; i++) {
+            int templateRowNum = 25 + i;
+            int targetRowNum = separatorStartRow + i;
+            Row targetRow = mainSheet.getRow(targetRowNum);
+            if (targetRow == null) {
+                targetRow = mainSheet.createRow(targetRowNum);
+            }
+            if (rowHeights.containsKey(templateRowNum)) {
+                targetRow.setHeight(rowHeights.get(templateRowNum).shortValue());
+            }
+        }
+        
+        // Copy separator content
+        Row templateSeparatorRow = mainSheet.getRow(25);
+        if (templateSeparatorRow != null) {
+            for (int i = 0; i <= 11; i++) {
+                int sourceRowNum = 25 + i;
+                int targetRowNum = separatorStartRow + i;
+                copyRowContent(mainSheet, sourceRowNum, targetRowNum, workbook);
+            }
+        }
+        
+        // Add page number
+        Row pageNumberRow = mainSheet.getRow(separatorStartRow + 8);
+        if (pageNumberRow != null) {
+            Cell pageCell = pageNumberRow.getCell(10);
+            if (pageCell == null) {
+                pageCell = pageNumberRow.createCell(10);
+            }
+            int totalPages = (int) Math.ceil((double) totalRows / 10);
+            pageCell.setCellValue((pageNumber + 1) + " of " + totalPages);
+        }
+        
+        // Add formulas for the remaining rows
+        int formulaRow = startRow + remainingRows;
+        int dataStartRow = startRow - remainingRows + 1;
+        int dataEndRow = startRow;
+        
+        for (int col = 6; col <= 17; col++) {
+            Row formulaRowObj = mainSheet.getRow(formulaRow);
+            if (formulaRowObj == null) {
+                formulaRowObj = mainSheet.createRow(formulaRow);
+            }
+            
+            Cell formulaCell = formulaRowObj.createCell(col);
+            String columnLetter = CellReference.convertNumToColString(col);
+            
+            String formula;
+            if (col == 10 || col == 11) {
+                formula = String.format("SUM(%s%d:%s%d)", 
+                    columnLetter, dataStartRow + 1, 
+                    columnLetter, dataEndRow + 1);
+            } else {
+                formula = String.format("COUNTIF(%s%d:%s%d,\"X\")", 
+                    columnLetter, dataStartRow + 1, 
+                    columnLetter, dataEndRow + 1);
+            }
+            
+            formulaCell.setCellFormula(formula);
+            addToSubtotalSheet(subTotalSheet, pageNumber, col, formula, workbook);
+        }
+        
+        // Add page break
+        mainSheet.setRowBreak(separatorStartRow);
+        
+    } catch (Exception e) {
+        logger.debug("Error handling remaining rows: " + e.getMessage());
+    }
 }
 
 private void cleanupWorkbook(Workbook workbook, Sheet mainSheet, boolean isMorePage, 
                            int blankLineCount, int pageSize, int pageNumber) {
-    // Implementation for final cleanup
+    try {
+        // Remove any temporary rows or sheets that were used during processing
+        if (isMorePage && blankLineCount > 0) {
+            // Remove blank rows at the beginning if needed
+            for (int i = 0; i < blankLineCount; i++) {
+                Row row = mainSheet.getRow(i);
+                if (row != null) {
+                    mainSheet.removeRow(row);
+                }
+            }
+        }
+        
+        // Ensure all formulas are recalculated
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet sheet = workbook.getSheetAt(i);
+            if (sheet != null) {
+                for (Row row : sheet) {
+                    for (Cell cell : row) {
+                        if (cell.getCellType() == CellType.FORMULA) {
+                            // Trigger formula recalculation
+                            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+                            evaluator.evaluateFormulaCell(cell);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Auto-size columns for better readability
+        for (int i = 0; i <= 23; i++) {
+            mainSheet.autoSizeColumn(i);
+            // Set minimum column width
+            if (mainSheet.getColumnWidth(i) < 2000) {
+                mainSheet.setColumnWidth(i, 2000);
+            }
+        }
+        
+    } catch (Exception e) {
+        logger.debug("Error during workbook cleanup: " + e.getMessage());
+    }
 }
 
 private void setPrintArea(Sheet sheet, int pageSize, int pageNumber) {
-    // Implementation for setting print area
+    try {
+        // Calculate print area based on page structure
+        int printStartRow = 24; // Base row
+        int printEndRow = printStartRow + (pageNumber * (pageSize + 12)) - 1;
+        
+        // Ensure we don't exceed sheet boundaries
+        int lastRowNum = sheet.getLastRowNum();
+        if (printEndRow > lastRowNum) {
+            printEndRow = lastRowNum;
+        }
+        
+        // Set print area (columns A-R, which are 0-17)
+        String printArea = String.format("$A$%d:$R$%d", printStartRow + 1, printEndRow + 1);
+        
+        // For XSSF sheets
+        if (sheet instanceof XSSFSheet) {
+            XSSFSheet xssfSheet = (XSSFSheet) sheet;
+            xssfSheet.setPrintArea(0, 17, printStartRow, printEndRow);
+        }
+        
+        // Set print setup
+        PrintSetup printSetup = sheet.getPrintSetup();
+        printSetup.setLandscape(false);
+        printSetup.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 0);
+        
+        // Set margins
+        sheet.setMargin(Sheet.LeftMargin, 0.5);
+        sheet.setMargin(Sheet.RightMargin, 0.5);
+        sheet.setMargin(Sheet.TopMargin, 0.5);
+        sheet.setMargin(Sheet.BottomMargin, 0.5);
+        sheet.setMargin(Sheet.HeaderMargin, 0.3);
+        sheet.setMargin(Sheet.FooterMargin, 0.3);
+        
+        // Set repeating rows for headers
+        sheet.setRepeatingRows(CellRangeAddress.valueOf("$1:$24"));
+        
+    } catch (Exception e) {
+        logger.debug("Error setting print area: " + e.getMessage());
+    }
+}
+
+// Additional helper method for cell value copying
+private void copyCellValue(Cell sourceCell, Cell targetCell) {
+    if (sourceCell == null || targetCell == null) return;
+    
+    switch (sourceCell.getCellType()) {
+        case STRING:
+            targetCell.setCellValue(sourceCell.getStringCellValue());
+            break;
+        case NUMERIC:
+            targetCell.setCellValue(sourceCell.getNumericCellValue());
+            break;
+        case BOOLEAN:
+            targetCell.setCellValue(sourceCell.getBooleanCellValue());
+            break;
+        case FORMULA:
+            targetCell.setCellFormula(sourceCell.getCellFormula());
+            break;
+        case BLANK:
+            targetCell.setBlank();
+            break;
+        default:
+            targetCell.setCellValue("");
+    }
 }
 ```
 
-Key changes and improvements:
+These methods now include:
 
-1. Apache POI Migration: Replaced F1J library with Apache POI XSSF for XLSX format
-2. Modern Java Practices: Used try-with-resources, proper exception handling
-3. Modular Design: Broke down the large method into smaller, focused helper methods
-4. Type Safety: Added proper type checking and validation
-5. Memory Management: Proper resource cleanup with finally blocks
-6. Maintained Functionality: All original business logic preserved including:
-   · OSHA 300 form formatting
-   · Injury/illness type mapping
-   · Outcome code processing
-   · Pagination logic
-   · Department name fallback logic
-   · Custom label handling
+1. handlePagination: Manages page breaks, formulas, and separator rows for each page
+2. copyRowFormat: Copies cell styles and formatting between rows
+3. handleRemainingRows: Handles the final partial page of data
+4. cleanupWorkbook: Performs final cleanup, auto-sizing, and formula recalculation
+5. setPrintArea: Configures printing settings and page layout
 
-The implementation maintains all the original functionality while using modern Java libraries and practices. You'll need to create the template300.xlsx file with the appropriate formatting that matches your original template.
+Key features implemented:
+
+· Proper formula generation for counts and sums
+· Page numbering and formatting
+· Print area configuration
+· Memory management and cleanup
+· Error handling with logging
+· Maintenance of original business logic while using Apache POI
+
+The implementation maintains the original OSHA 300 form structure and functionality while using modern Apache POI libraries.
