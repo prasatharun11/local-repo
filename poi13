@@ -1,0 +1,170 @@
+private void createCellWithValue(Row row, int column, String value, Workbook workbook) {
+    if (row == null || value == null) {
+        return;
+    }
+    
+    Cell cell = row.getCell(column);
+    if (cell == null) {
+        cell = row.createCell(column);
+    }
+    
+    // Set the cell value
+    cell.setCellValue(value);
+    
+    // Apply appropriate formatting based on column type
+    CellStyle style = workbook.createCellStyle();
+    
+    switch (column) {
+        case 0: // Branch-Case-Symbol (left aligned)
+        case 1: // Employee Name
+        case 2: // Job Title
+        case 3: // Date of Injury
+        case 4: // Accident Location
+        case 5: // Injury Description
+            style.setAlignment(HorizontalAlignment.LEFT);
+            style.setVerticalAlignment(VerticalAlignment.TOP);
+            break;
+            
+        case 6:  // Death
+        case 7:  // Days Away from Work
+        case 8:  // Job Transfer/Restriction
+        case 9:  // Other Recordable
+        case 12: // Injury
+        case 13: // Skin Disorder
+        case 14: // Respiratory Condition
+        case 15: // Poisoning
+        case 16: // Hearing Loss
+        case 17: // Other Illnesses
+            style.setAlignment(HorizontalAlignment.CENTER);
+            style.setVerticalAlignment(VerticalAlignment.CENTER);
+            // For X marks, make them bold
+            if ("X".equals(value)) {
+                Font font = workbook.createFont();
+                font.setBold(true);
+                style.setFont(font);
+            }
+            break;
+            
+        case 10: // Days Away Count
+        case 11: // Restricted Days Count
+            style.setAlignment(HorizontalAlignment.RIGHT);
+            style.setVerticalAlignment(VerticalAlignment.CENTER);
+            // Format as numbers
+            try {
+                Double numericValue = Double.parseDouble(value);
+                cell.setCellValue(numericValue);
+                style.setDataFormat(workbook.createDataFormat().getFormat("0"));
+            } catch (NumberFormatException e) {
+                // Keep as string if not numeric
+                cell.setCellValue(value);
+            }
+            break;
+            
+        case 18: // Division
+        case 19: // Location
+        case 20: // Department
+        case 21: // Section
+        case 22: // Level 5
+        case 23: // Level 6
+            style.setAlignment(HorizontalAlignment.RIGHT);
+            style.setVerticalAlignment(VerticalAlignment.CENTER);
+            break;
+            
+        default:
+            style.setAlignment(HorizontalAlignment.LEFT);
+            style.setVerticalAlignment(VerticalAlignment.TOP);
+    }
+    
+    // Set borders for better readability
+    style.setBorderTop(BorderStyle.THIN);
+    style.setBorderBottom(BorderStyle.THIN);
+    style.setBorderLeft(BorderStyle.THIN);
+    style.setBorderRight(BorderStyle.THIN);
+    
+    cell.setCellStyle(style);
+}
+
+// Overloaded method for numeric values
+private void createCellWithValue(Row row, int column, Number value, Workbook workbook) {
+    if (row == null || value == null) {
+        return;
+    }
+    
+    Cell cell = row.getCell(column);
+    if (cell == null) {
+        cell = row.createCell(column);
+    }
+    
+    cell.setCellValue(value.doubleValue());
+    
+    CellStyle style = workbook.createCellStyle();
+    style.setAlignment(HorizontalAlignment.RIGHT);
+    style.setVerticalAlignment(VerticalAlignment.CENTER);
+    style.setDataFormat(workbook.createDataFormat().getFormat("0"));
+    
+    // Set borders
+    style.setBorderTop(BorderStyle.THIN);
+    style.setBorderBottom(BorderStyle.THIN);
+    style.setBorderLeft(BorderStyle.THIN);
+    style.setBorderRight(BorderStyle.THIN);
+    
+    cell.setCellStyle(style);
+}
+
+// Overloaded method for boolean values (for X marks)
+private void createCellWithValue(Row row, int column, boolean value, Workbook workbook) {
+    if (row == null) {
+        return;
+    }
+    
+    Cell cell = row.getCell(column);
+    if (cell == null) {
+        cell = row.createCell(column);
+    }
+    
+    cell.setCellValue(value ? "X" : "");
+    
+    CellStyle style = workbook.createCellStyle();
+    style.setAlignment(HorizontalAlignment.CENTER);
+    style.setVerticalAlignment(VerticalAlignment.CENTER);
+    
+    if (value) {
+        Font font = workbook.createFont();
+        font.setBold(true);
+        style.setFont(font);
+    }
+    
+    // Set borders
+    style.setBorderTop(BorderStyle.THIN);
+    style.setBorderBottom(BorderStyle.THIN);
+    style.setBorderLeft(BorderStyle.THIN);
+    style.setBorderRight(BorderStyle.THIN);
+    
+    cell.setCellStyle(style);
+}
+
+// Helper method to create empty cell with proper formatting
+private void createEmptyCell(Row row, int column, Workbook workbook) {
+    if (row == null) {
+        return;
+    }
+    
+    Cell cell = row.getCell(column);
+    if (cell == null) {
+        cell = row.createCell(column);
+    }
+    
+    cell.setCellValue("");
+    
+    CellStyle style = workbook.createCellStyle();
+    style.setAlignment(HorizontalAlignment.LEFT);
+    style.setVerticalAlignment(VerticalAlignment.TOP);
+    
+    // Set borders
+    style.setBorderTop(BorderStyle.THIN);
+    style.setBorderBottom(BorderStyle.THIN);
+    style.setBorderLeft(BorderStyle.THIN);
+    style.setBorderRight(BorderStyle.THIN);
+    
+    cell.setCellStyle(style);
+}
