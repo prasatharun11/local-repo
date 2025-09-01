@@ -1,0 +1,184 @@
+// In the main method, replace the problematic shiftRows call:
+// mainSheet.shiftRows(excelCurrRow, mainSheet.getLastRowNum(), 1);
+
+// With this safe row shifting method:
+private void safeShiftRows(Sheet sheet, int startRow, int endRow, int n) {
+    if (startRow > endRow) {
+        // Swap if first moved index > last moved index
+        int temp = startRow;
+        startRow = endRow;
+        endRow = temp;
+    }
+    
+    // Ensure indices are within valid range
+    int lastRowNum = sheet.getLastRowNum();
+    if (startRow < 0) startRow = 0;
+    if (endRow > lastRowNum) endRow = lastRowNum;
+    if (startRow > endRow) return; // No rows to shift
+    
+    try {
+        sheet.shiftRows(startRow, endRow, n);
+    } catch (IllegalArgumentException e) {
+        logger.debug("Error shifting rows: " + e.getMessage());
+        // Fallback: manual row shifting
+        manualShiftRows(sheet, startRow, endRow, n);
+    }
+}
+
+// Manual row shifting implementation as fallback
+private void manualShiftRows(Sheet sheet, int startRow, int endRow, int n) {
+    if (n == 0) return;
+    
+    if (n > 0) {
+        // Shift rows down
+        for (int i = endRow; i >= startRow; i--) {
+            Row sourceRow = sheet.getRow(i);
+            if (sourceRow != null) {
+                Row targetRow = sheet.getRow(i + n);
+                if (targetRow == null) {
+                    targetRow = sheet.createRow(i + n);
+                }
+                copyRowWithStyles(sheet, i, i + n);
+                sheet.removeRow(sourceRow);
+            }
+        }
+    } else {
+        // Shift rows up
+        for (int i = startRow; i <= endRow; i++) {
+            Row sourceRow = sheet.getRow(i);
+            if (sourceRow != null) {
+                Row targetRow = sheet.getRow(i + n);
+                if (targetRow == null) {
+                    targetRow = sheet.createRow(i + n);
+                }
+                copyRowWithStyles(sheet, i, i + n);
+                sheet.removeRow(sourceRow);
+            }
+        }
+    }
+}
+
+// Helper method to copy row with styles
+private void copyRowWithStyles(Sheet sheet, int sourceRowNum, int targetRowNum) {
+    Row sourceRow = sheet.getRow(sourceRowNum);
+    Row targetRow = sheet.getRow(targetRowNum);
+    
+    if (sourceRow == null) return;
+    
+    if (targetRow == null) {
+        targetRow = sheet.createRow(targetRowNum);
+    }
+    
+    // Copy row height
+    targetRow.setHeight(sourceRow.getHeight());
+    
+    // Copy cell values and styles
+    for (int i = 0; i <= 23; i++) {
+        Cell sourceCell = sourceRow.getCell(i);
+        if (sourceCell != null) {
+            Cell targetCell = targetRow.createCell(i);
+            copyCell(sourceCell, targetCell);
+        }
+    }
+}
+
+// Enhanced copyCell method
+private void copyCell(Cell sourceCell, Cell targetCell) {
+    if (sourceCell == null || targetCell == null) return;
+    
+    // Copy cell value
+    switch (sourceCell.getCellType()) {
+        case STRING:
+            targetCell.setCellValue(sourceCell.getStringCellValue());
+            break;
+        case NUMERIC:
+            targetCell.setCellValue(sourceCell.getNumericCellValue());
+            break;
+        case BOOLEAN:
+            targetCell.setCellValue(sourceCell.getBooleanCellValue());
+            break;
+        case FORMULA:
+            targetCell.setCellFormula(sourceCell.getCellFormula());
+            break;
+        case BLANK:
+            targetCell.setBlank();
+            break;
+        default:
+            targetCell.setCellValue("");
+    }
+    
+    // Copy cell style
+    CellStyle newStyle = targetCell.getSheet().getWorkbook().createCellStyle();
+    newStyle.cloneStyleFrom(sourceCell.getCellStyle());
+    targetCell.setCellStyle(newStyle);
+}
+
+// Now update the main method where you insert new rows:
+// Replace: book.insertRange(excelCurrRow,0,excelCurrRow,0,BookModel.eShiftRows);
+// With:
+private void insertNewRow(Sheet sheet, int rowIndex, Workbook workbook) {
+    int lastRowNum = sheet.getLastRowNum();
+    
+    // Ensure we don't go beyond sheet limits
+    if (rowIndex > lastRowNum + 1) {
+        rowIndex = lastRowNum + 1;
+    }
+    
+    // Shift rows down to make space
+    safeShiftRows(sheet, rowIndex, lastRowNum, 1);
+    
+    // Create new row with template formatting
+    Row newRow = sheet.createRow(rowIndex);
+    newRow.setHeight((short) 330);
+    
+    // Copy formatting from template row (row 24)
+    Row templateRow = sheet.getRow(24);
+    if (templateRow != null) {
+        for (int i = 0; i <= 23; i++) {
+            Cell templateCell = templateRow.getCell(i);
+            Cell newCell = newRow.createCell(i);
+            if (templateCell != null) {
+                CellStyle style = workbook.createCellStyle();
+                style.cloneStyleFrom(templateCell.getCellStyle());
+                newCell.setCellStyle(style);
+            }
+        }
+    }
+}
+
+// Also fix the row deletion logic:
+// Replace: book.deleteRange(excelCurrRow, 0, excelCurrRow, 0, BookModel.eShiftRows);
+// With:
+private void safeDeleteRow(Sheet sheet, int rowIndex) {
+    int lastRowNum = sheet.getLastRowNum();
+    
+    if (rowIndex < 0 || rowIndex > lastRowNum) {
+        return; // Invalid row index
+    }
+    
+    Row rowToDelete = sheet.getRow(rowIndex);
+    if (rowToDelete != null) {
+        sheet.removeRow(rowToDelete);
+    }
+    
+    // Shift remaining rows up
+    if (rowIndex < lastRowNum) {
+        safeShiftRows(sheet, rowIndex + 1, lastRowNum, -1);
+    }
+}
+
+// Update the pagination handling to use safe methods
+private void handlePagination(Workbook workbook, Sheet mainSheet, Sheet subTotalSheet, 
+                            int startRow, int pageSize, Map<Integer, Integer> rowHeights, 
+                            int pageNumber, int totalRows) {
+    try {
+        // ... existing code ...
+        
+        // Use safe row operations
+        safeShiftRows(mainSheet, startRow, mainSheet.getLastRowNum(), pageSize + 12);
+        
+        // ... rest of the method ...
+    } catch (Exception e) {
+        logger.debug("Error handling pagination: " + e.getMessage());
+    }
+}
