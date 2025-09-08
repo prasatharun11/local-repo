@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Actuator URL Checker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+    }
+    button {
+      margin: 10px 0;
+      padding: 8px 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    .ok {
+      color: green;
+      font-weight: bold;
+    }
+    .fail {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Actuator URL Status Checker</h2>
+  <p>Enter one URL per line:</p>
+  <textarea id="urlList"></textarea><br>
+  <button onclick="checkUrls()">Check Status</button>
+  <table id="results">
+    <thead>
+      <tr>
+        <th>URL</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function checkUrls() {
+      const urls = document.getElementById("urlList").value.split("\n").map(u => u.trim()).filter(u => u);
+      const tbody = document.querySelector("#results tbody");
+      tbody.innerHTML = "";
+
+      for (const url of urls) {
+        const row = document.createElement("tr");
+        const urlCell = document.createElement("td");
+        urlCell.textContent = url;
+        const statusCell = document.createElement("td");
+        statusCell.textContent = "Checking...";
+        row.appendChild(urlCell);
+        row.appendChild(statusCell);
+        tbody.appendChild(row);
+
+        try {
+          const response = await fetch(url, { method: "GET" });
+          if (response.status === 200) {
+            statusCell.textContent = "200 OK";
+            statusCell.className = "ok";
+          } else {
+            statusCell.textContent = response.status + " " + response.statusText;
+            statusCell.className = "fail";
+          }
+        } catch (error) {
+          statusCell.textContent = "Error (network/CORS)";
+          statusCell.className = "fail";
+        }
+      }
+    }
+  </script>
+</body>
+</html>
