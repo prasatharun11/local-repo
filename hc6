@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Actuator Launcher — Buttons & Status</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin: 20px; background:#f5f7fb; color:#111; }
+    h1 { margin: 0 0 8px 0; font-size: 20px; }
+    p.small { margin:4px 0 12px 0; color:#444; font-size:13px; }
+    textarea { width:100%; height:110px; padding:10px; font-size:13px; border:1px solid #d6dae3; border-radius:8px; resize:vertical; background:white; }
+    .controls { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    button.btn { padding:8px 12px; border-radius:8px; border:0; cursor:pointer; background:#0366d6; color:white; font-weight:600; }
+    button.ghost { background: white; color:#333; border:1px solid #d6dae3; }
+    .warn { background:#ff9f1c; color:white; }
+    #buttonsContainer { margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; }
+    .url-chip { display:flex; align-items:center; gap:8px; padding:8px 10px; background:white; border-radius:8px; border:1px solid #e6e9ef; box-shadow: 0 1px 2px rgba(16,24,40,0.03); }
+    .url-chip button { padding:6px 10px; border-radius:6px; border:0; cursor:pointer; }
+    .open-btn { background:#10b981; color:white; }
+    .open-btn:hover { filter:brightness(.95); }
+    .copy-btn { background:#efefef; color:#111; }
+    .meta { font-size:12px; color:#444; }
+    table { width:100%; border-collapse:collapse; margin-top:18px; background:white; border-radius:8px; overflow:hidden; box-shadow:0 6px 18px rgba(12,24,48,0.06); }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #f0f2f6; font-size:13px; }
+    th { background:#fbfdff; font-weight:600; color:#333; }
+    .status-ok { color: #059669; font-weight:700; }
+    .status-bad { color: #dc2626; font-weight:700; }
+    .status-unknown { color:#6b7280; font-weight:700; }
+    .small-muted { font-size:12px; color:#666; }
+    .flex { display:flex; gap:8px; align-items:center; }
+  </style>
+</head>
+<body>
+  <h1>Actuator Launcher — Buttons & Status</h1>
+  <p class="small">Paste one URL per line (you can omit <code>http://</code>/<code>https://</code> — it will be normalized). Click <strong>Create Buttons</strong> to get a button for each URL. Click a button to open that URL in a new tab.</p>
+
+  <textarea id="urlList" placeholder="http://localhost:8080/actuator/health
+localhost:8081/actuator/info
+example.com/actuator/health"></textarea>
+
+  <div class="controls">
+    <button class="btn" id="createButtonsBtn">Create Buttons</button>
+    <button class="btn ghost" id="openAllBtn">Open All (may be blocked by pop-up blocker)</button>
+    <button class="btn ghost" id="clearBtnsBtn">Clear Buttons</button>
+    <button class="btn" id="checkStatusBtn" title="Requires the proxy server at http://localhost:3000/check">Check Status (via proxy)</button>
+  </div>
+
+  <div style="margin-top:8px;" class="small-muted">
+    Tip: opening directly (button click) does not trigger CORS. The status check uses the proxy you previously ran at <code>http://localhost:3000/check</code>.
+  </div>
+
+  <div id="buttonsContainer" aria-live="polite"></div>
+
+  <table id="results" style="display:none;">
+    <thead>
+      <tr><th>URL</th><th>Status</th><th>Info</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    // Helpers
+    function normalizeUrl(raw) {
+      if (!raw) return null;
+      let u = raw.trim();
+      if (!u) return null;
+      // If user included only host/path, add http://
+      if (!/^[a-zA-Z][a-zA-Z0-9+-.]*:\/\//.test(u)) {
+        u = 'http://' + u;
+      }
+      try {
+        // This will throw if invalid
+        const urlObj = new URL(u);
+        return urlObj.href;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function shortLabel(u) {
+      try {
+        const urlObj = new URL(u);
+        let path = urlObj.pathname.replace(/\/+$/, '') || '/';
+        if (path.length > 18) path = path.slice(0, 15) + '…';
+        return urlObj.hostname + (urlObj.port ? ':'+urlObj.port : '') + path;
+      } catch (e) {
+        return u;
+      }
+    }
+
+    function el(tag, props = {}, ...children) {
+      const e = document.createElement(tag);
+      Object.entries(props).forEach(([k, v]) => {
+        if (k === 'class') e.className = v;
+        else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
+        else e.setAttribute(k, v === true ? '' : v);
+      });
+      children.flat().forEach(c => {
+        if (typeof c === 'string') e.appendChild(document.createTextNode(c));
+        else if (c instanceof Node) e.appendChild(c);
+      });
+      return e;
+    }
+
+    const urlTextarea = document.getElementById('urlList');
+    const createButtonsBtn = document.getElementById('createButtonsBtn');
+    const openAllBtn = document.getElementById('openAllBtn');
+    const clearBtnsBtn = document.getElementById('clearBtnsBtn');
+    const checkStatusBtn = document.getElementById('checkStatusBtn');
+    const buttonsContainer = document.getElementById('buttonsContainer');
+    const resultsTable = document.getElementById('results');
+    const resultsTbody = resultsTable.querySelector('tbody');
+
+    // Create one button per URL
+    function createButtons() {
+      buttonsContainer.innerHTML = '';
+      const lines = urlTextarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+      const urls = lines.map(normalizeUrl).filter(Boolean);
+      if (urls.length === 0) {
+        buttonsContainer.appendChild(el('div', { class: 'meta' }, 'No valid URLs found.'));
+        return;
+      }
+
+      urls.forEach(u => {
+        const chip = el('div', { class: 'url-chip' });
+        const openBtn = el('button', { class: 'open-btn', title: u, onclick: () => openUrl(u) }, 'Open');
+        const copyBtn = el('button', { class: 'copy-btn', onclick: () => copyToClipboard(u) }, 'Copy');
+        const label = el('div', { class: 'meta' }, shortLabel(u));
+        chip.appendChild(openBtn);
+        chip.appendChild(copyBtn);
+        chip.appendChild(label);
+        buttonsContainer.appendChild(chip);
+      });
+    }
+
+    function clearButtons() {
+      buttonsContainer.innerHTML = '';
+      resultsTable.style.display = 'none';
+      resultsTbody.innerHTML = '';
+    }
+
+    function openUrl(url) {
+      // user-initiated click — should bypass CORS and is allowed by browsers
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function copyToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          alert('Copied: ' + text);
+        }, () => {
+          fallbackCopy(text);
+        });
+      } else {
+        fallbackCopy(text);
+      }
+    }
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); alert('Copied: ' + text); } catch(e) { alert('Copy failed'); }
+      document.body.removeChild(ta);
+    }
+
+    // Open all (note: some browsers will block multiple popups)
+    function openAll() {
+      const lines = urlTextarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+      const urls = lines.map(normalizeUrl).filter(Boolean);
+      if (urls.length === 0) { alert('No valid URLs to open.'); return; }
+
+      // Try to open each URL in its own tab. Browsers may block many popups.
+      // We'll open them sequentially in the same click event to maximize chance of success.
+      urls.forEach(u => {
+        window.open(u, '_blank', 'noopener,noreferrer');
+      });
+
+      if (urls.length > 6) {
+        alert('Opened attempt made for ' + urls.length + ' URLs. If some tabs were blocked, try opening individually.');
+      }
+    }
+
+    // Check statuses via proxy at http://localhost:3000/check
+    async function checkStatuses() {
+      resultsTbody.innerHTML = '';
+      resultsTable.style.display = 'none';
+
+      const lines = urlTextarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+      const urls = lines.map(normalizeUrl).filter(Boolean);
+      if (urls.length === 0) {
+        alert('No valid URLs to check.');
+        return;
+      }
+
+      resultsTable.style.display = '';
+      // Show "checking..." rows
+      urls.forEach(u => {
+        const row = el('tr', {},
+          el('td', {}, u),
+          el('td', {}, el('span', { class: 'status-unknown' }, 'Checking...')),
+          el('td', {}, '')
+        );
+        resultsTbody.appendChild(row);
+      });
+
+      try {
+        const resp = await fetch('http://localhost:3000/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls })
+        });
+
+        if (!resp.ok) throw new Error('Proxy responded with ' + resp.status);
+
+        const data = await resp.json(); // expected [{url, status, statusText}, ...]
+        resultsTbody.innerHTML = '';
+
+        data.forEach(item => {
+          const statusText = (item.status === 'Error') ? item.statusText || 'Error' : (item.status + ' ' + (item.statusText || ''));
+          const statusClass = (item.status === 200) ? 'status-ok' : (item.status === 'Error' ? 'status-bad' : 'status-bad');
+          const row = el('tr', {},
+            el('td', {}, item.url),
+            el('td', {}, el('span', { class: statusClass }, statusText)),
+            el('td', {},
+              el('div', { class: 'flex' },
+                el('button', { class: 'open-btn', onclick: () => openUrl(item.url) }, 'Open'),
+                el('button', { class: 'copy-btn', onclick: () => copyToClipboard(item.url) }, 'Copy')
+              )
+            )
+          );
+          resultsTbody.appendChild(row);
+        });
+
+      } catch (err) {
+        resultsTbody.innerHTML = '';
+        resultsTable.style.display = 'none';
+        alert('Status check failed. Make sure your proxy is running at http://localhost:3000 and accepts POST /check. Error: ' + err.message);
+      }
+    }
+
+    // Event wiring
+    createButtonsBtn.addEventListener('click', createButtons);
+    clearBtnsBtn.addEventListener('click', clearButtons);
+    openAllBtn.addEventListener('click', openAll);
+    checkStatusBtn.addEventListener('click', checkStatuses);
+
+    // Initialize with example text (optional)
+    // urlTextarea.value = 'http://localhost:8080/actuator/health\nlocalhost:8081/actuator/info';
+  </script>
+</body>
+</html>
