@@ -1,0 +1,122 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+public class TestDataGenerator {
+
+    private static final DateTimeFormatter OUTPUT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+
+    /**
+     * Generate JSON string with worst-case program data (279 countries each).
+     */
+    public static String generateWorstCasePrograms(int programCount) throws IOException {
+        ProgramResponse response = new ProgramResponse();
+        response.setUserType("Global Broker");
+        response.setEmail("test@test.com");
+
+        // Non-USA Programs (worst case)
+        List<ProgramResponse.Program> nonUsaPrograms = IntStream.rangeClosed(1, programCount)
+                .mapToObj(i -> {
+                    ProgramResponse.Program p = new ProgramResponse.Program();
+                    p.setProgramID("P-" + String.format("%08d", i));
+                    p.setCountryCode("GBR");
+                    p.setCountryName("Great Britain");
+                    p.setRegionName("EMEA");
+                    // Add 279 country codes
+                    List<String> codes = IntStream.range(0, 279)
+                            .mapToObj(j -> String.format("C%03d", j))
+                            .collect(Collectors.toList());
+                    p.setPolicyCountryCodes(codes);
+                    return p;
+                })
+                .collect(Collectors.toList());
+
+        response.setNonUsaPrograms(nonUsaPrograms);
+
+        // USA Programs (policies best case — small size)
+        List<ProgramResponse.Program> usaPrograms = new ArrayList<>();
+        ProgramResponse.Program usaProgram = new ProgramResponse.Program();
+        usaProgram.setProgramID("P-USA-1");
+        usaProgram.setCountryCode("USA");
+        usaProgram.setCountryName("United States");
+        usaProgram.setRegionName("AMERICAS");
+
+        List<ProgramResponse.Policy> policies = IntStream.rangeClosed(1, 4500)
+                .mapToObj(i -> {
+                    ProgramResponse.Policy pol = new ProgramResponse.Policy();
+                    pol.setPolicyId("POL" + i);
+                    pol.setPolicyEffectiveDate(LocalDateTime.now().plusDays(i).format(OUTPUT_FMT));
+                    return pol;
+                })
+                .collect(Collectors.toList());
+
+        usaProgram.setPolicies(policies);
+        usaPrograms.add(usaProgram);
+        response.setUsaPrograms(usaPrograms);
+
+        return new ObjectMapper().writeValueAsString(response);
+    }
+
+    /**
+     * Generate JSON string with best-case program data (1 country each).
+     */
+    public static String generateBestCasePrograms(int programCount) throws IOException {
+        ProgramResponse response = new ProgramResponse();
+        response.setUserType("Global Broker");
+        response.setEmail("test@test.com");
+
+        // Non-USA Programs (best case)
+        List<ProgramResponse.Program> nonUsaPrograms = IntStream.rangeClosed(1, programCount)
+                .mapToObj(i -> {
+                    ProgramResponse.Program p = new ProgramResponse.Program();
+                    p.setProgramID("P-" + String.format("%08d", i));
+                    p.setCountryCode("GBR");
+                    p.setCountryName("Great Britain");
+                    p.setRegionName("EMEA");
+                    // Only 1 country
+                    p.setPolicyCountryCodes(Collections.singletonList("GBR"));
+                    return p;
+                })
+                .collect(Collectors.toList());
+
+        response.setNonUsaPrograms(nonUsaPrograms);
+
+        // USA Programs (policies worst case — max policies)
+        List<ProgramResponse.Program> usaPrograms = new ArrayList<>();
+        ProgramResponse.Program usaProgram = new ProgramResponse.Program();
+        usaProgram.setProgramID("P-USA-1");
+        usaProgram.setCountryCode("USA");
+        usaProgram.setCountryName("United States");
+        usaProgram.setRegionName("AMERICAS");
+
+        List<ProgramResponse.Policy> policies = IntStream.rangeClosed(1, 4500)
+                .mapToObj(i -> {
+                    ProgramResponse.Policy pol = new ProgramResponse.Policy();
+                    pol.setPolicyId("POL" + i);
+                    pol.setPolicyEffectiveDate(LocalDateTime.now().plusDays(i).format(OUTPUT_FMT));
+                    return pol;
+                })
+                .collect(Collectors.toList());
+
+        usaProgram.setPolicies(policies);
+        usaPrograms.add(usaProgram);
+        response.setUsaPrograms(usaPrograms);
+
+        return new ObjectMapper().writeValueAsString(response);
+    }
+
+    public static void main(String[] args) throws Exception {
+        // Worst case: Programs with 279 country codes each
+        String worstCaseJson = generateWorstCasePrograms(500);
+        System.out.println("Worst-case JSON length = " + worstCaseJson.length());
+
+        // Best case: Programs with only 1 country each
+        String bestCaseJson = generateBestCasePrograms(20000);
+        System.out.println("Best-case JSON length = " + bestCaseJson.length());
+    }
+}
