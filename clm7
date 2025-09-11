@@ -1,0 +1,77 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+public class TestDataGenerator {
+
+    public static void main(String[] args) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
+        // --- Worst-case (279 countries) ---
+        List<ProgramResponse.Program> worstCasePrograms = IntStream.rangeClosed(1, 400)
+                .mapToObj(i -> {
+                    ProgramResponse.Program p = new ProgramResponse.Program();
+                    p.setProgramID("P-" + String.format("%09d", i));
+                    p.setCountryCode("NON");
+                    List<String> codes = IntStream.rangeClosed(1, 279)
+                            .mapToObj(j -> String.format("C%03d", j))
+                            .collect(Collectors.toList());
+                    p.setPolicyCountryCodes(codes);
+                    return p;
+                })
+                .collect(Collectors.toList());
+
+        // --- Best-case (1 country only) ---
+        List<ProgramResponse.Program> bestCasePrograms = IntStream.rangeClosed(1, 20000)
+                .mapToObj(i -> {
+                    ProgramResponse.Program p = new ProgramResponse.Program();
+                    p.setProgramID("P-" + String.format("%09d", i));
+                    p.setCountryCode("NON");
+                    p.setPolicyCountryCodes(Collections.singletonList("USA"));
+                    return p;
+                })
+                .collect(Collectors.toList());
+
+        // --- Add USA programs with policies ---
+        List<ProgramResponse.Program> usaPrograms = new ArrayList<>();
+        ProgramResponse.Program usaProgram = new ProgramResponse.Program();
+        usaProgram.setProgramID("P-USA-00001");
+        usaProgram.setCountryCode("USA");
+        List<ProgramResponse.Policy> policies = IntStream.rangeClosed(1, 4500)
+                .mapToObj(i -> {
+                    ProgramResponse.Policy pol = new ProgramResponse.Policy();
+                    pol.setPolicyId("POL" + String.format("%06d", i));
+                    pol.setPolicyEffectiveDate("2025-01-01T00:00:00.000+0000");
+                    return pol;
+                })
+                .collect(Collectors.toList());
+        usaProgram.setPolicies(policies);
+        usaPrograms.add(usaProgram);
+
+        // --- Test both scenarios ---
+        testScenario("Worst Case (279 countries)", worstCasePrograms, usaPrograms, mapper);
+        testScenario("Best Case (1 country)", bestCasePrograms, usaPrograms, mapper);
+    }
+
+    private static void testScenario(String label, List<ProgramResponse.Program> nonUsaPrograms,
+                                     List<ProgramResponse.Program> usaPrograms, ObjectMapper mapper) throws Exception {
+        ProgramResponse response = new ProgramResponse();
+        response.setUserType("TEST");
+        response.setNonUsaPrograms(nonUsaPrograms);
+        response.setUsaPrograms(usaPrograms);
+
+        String json = mapper.writeValueAsString(response);
+
+        Map<String, String> result = OptimizedProgramProcessor.processProgramResponse(json);
+
+        System.out.println("\n--- " + label + " ---");
+        result.entrySet().stream()
+                .filter(e -> e.getKey().startsWith("programChunk"))
+                .forEach(e -> System.out.println(e.getKey() + " length = " + e.getValue().length()));
+
+        System.out.println("Total Programs = " + result.get("totalProgramCount"));
+        System.out.println("Total Policies = " + result.get("totalPolicyCount"));
+    }
+}
