@@ -1,0 +1,156 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+public class OptimizedProgramProcessor {
+
+    private static final int PROGRAM_MAX_LENGTH = 32000;
+    private static final int PROGRAM_MAX_CHUNKS = 10;
+    private static final int POLICY_CHUNK_SIZE = 1450;
+    private static final int POLICY_MAX_CHUNKS = 3;
+
+    public static Map<String, String> processProgramResponse(String json) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        ProgramResponse response = mapper.readValue(json, ProgramResponse.class);
+
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("userType", response.getUserType());
+
+        // ---- PROGRAM ENTRIES ----
+        List<String> nonUsaProgramEntries = Optional.ofNullable(response.getNonUsaPrograms())
+                .orElse(Collections.emptyList())
+                .stream()
+                .map(program -> {
+                    Set<String> uniqueCountries = Optional.ofNullable(program.getPolicyCountryCodes())
+                            .orElse(Collections.emptyList())
+                            .stream()
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
+                    String countries = String.join("", uniqueCountries);
+                    return program.getProgramID() + "|" + countries + "~";
+                })
+                .collect(Collectors.toList());
+
+        List<String> programChunks = partitionChunks(nonUsaProgramEntries, PROGRAM_MAX_LENGTH, true, PROGRAM_MAX_CHUNKS);
+
+        // ---- POLICY ENTRIES ----
+        DateTimeFormatter inputFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX");
+        DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        List<String> usaPolicyEntries = Optional.ofNullable(response.getUsaPrograms())
+                .orElse(Collections.emptyList())
+                .stream()
+                .flatMap(program -> Optional.ofNullable(program.getPolicies())
+                        .orElse(Collections.emptyList())
+                        .stream())
+                .map(policy -> {
+                    String formattedDate = LocalDateTime.parse(policy.getPolicyEffectiveDate(), inputFmt).format(outputFmt);
+                    return policy.getPolicyId() + "|" + formattedDate + "~";
+                })
+                .collect(Collectors.toList());
+
+        List<String> policyChunks = partitionChunks(usaPolicyEntries, POLICY_CHUNK_SIZE, false, POLICY_MAX_CHUNKS);
+
+        // ---- PUT RESULTS ----
+        for (int i = 0; i < PROGRAM_MAX_CHUNKS; i++) {
+            result.put("programChunk" + (i + 1), programChunks.get(i));
+        }
+        for (int i = 0; i < POLICY_MAX_CHUNKS; i++) {
+            result.put("policyChunk" + (i + 1), policyChunks.get(i));
+        }
+
+        result.put("totalProgramCount", String.valueOf(nonUsaProgramEntries.size()));
+        result.put("totalPolicyCount", String.valueOf(usaPolicyEntries.size()));
+
+        return result;
+    }
+
+    /**
+     * Unified partitioner for both program (by length) and policy (by count).
+     * Includes rollback rules for program chunks.
+     */
+    private static List<String> partitionChunks(List<String> entries, int chunkLimit, boolean byLength, int numChunks) {
+        List<String> chunks = new ArrayList<>(Collections.nCopies(numChunks, ""));
+
+        if (byLength) {
+            // ---- Length-based (Programs) ----
+            StringBuilder current = new StringBuilder();
+            int chunkIndex = 0;
+
+            for (String entry : entries) {
+                if (current.length() + entry.length() > chunkLimit && chunkIndex < numChunks) {
+                    if (current.length() > 0) {
+                        if (current.charAt(current.length() - 1) != '~') current.append("~");
+                        chunks.set(chunkIndex, current.toString());
+                        chunkIndex++;
+                        current = new StringBuilder(entry);
+                    } else {
+                        chunks.set(chunkIndex, entry);
+                        chunkIndex++;
+                        current = new StringBuilder();
+                    }
+                } else {
+                    current.append(entry);
+                }
+            }
+            if (chunkIndex < numChunks) {
+                if (current.length() == 0 || current.charAt(current.length() - 1) != '~') current.append("~");
+                chunks.set(chunkIndex, current.toString());
+            }
+
+            // ---- Rollback Fix ----
+            for (int i = 1; i < numChunks; i++) {
+                String cur = chunks.get(i);
+                String prev = chunks.get(i - 1);
+
+                if (!cur.isEmpty()) {
+                    if (cur.charAt(0) == '|') {
+                        // rollback entire programId
+                        int lastIdx = prev.lastIndexOf("P-");
+                        if (lastIdx != -1) {
+                            String rollback = prev.substring(lastIdx);
+                            prev = prev.substring(0, lastIdx);
+                            cur = rollback + cur.substring(1);
+                        }
+                    } else if (cur.charAt(0) == '~') {
+                        // rollback last country+~
+                        if (prev.length() >= 4) {
+                            String rollback = prev.substring(prev.length() - 4);
+                            prev = prev.substring(0, prev.length() - 4);
+                            cur = rollback + cur.substring(1);
+                        }
+                    }
+                }
+
+                chunks.set(i - 1, prev.isEmpty() ? "~" : prev);
+                chunks.set(i, cur.isEmpty() ? "~" : cur);
+            }
+
+            // Fill empty chunks with "~"
+            for (int i = 0; i < numChunks; i++) {
+                if (chunks.get(i).isEmpty()) chunks.set(i, "~");
+            }
+
+        } else {
+            // ---- Count-based (Policies) ----
+            AtomicInteger counter = new AtomicInteger(0);
+            entries.stream()
+                    .collect(Collectors.groupingBy(s -> counter.getAndIncrement() / chunkLimit))
+                    .forEach((idx, group) -> {
+                        if (idx < numChunks) {
+                            String joined = String.join("", group);
+                            if (!joined.endsWith("~")) joined += "~";
+                            chunks.set(idx, joined);
+                        }
+                    });
+            for (int i = 0; i < numChunks; i++) {
+                if (chunks.get(i).isEmpty()) chunks.set(i, "~");
+            }
+        }
+
+        return chunks;
+    }
+}
