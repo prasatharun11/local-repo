@@ -1,0 +1,119 @@
+import java.util.*;
+
+public class ChunkPartitioner {
+
+    private enum TokenType { PROGRAM, SEP_PIPE, COUNTRY, SEP_TILDE }
+
+    private static class Token {
+        TokenType type;
+        String text;
+        Token(TokenType type, String text) { this.type = type; this.text = text; }
+        public String toString() { return text; }
+    }
+
+    public static List<String> partitionChunks(List<String> entries, int chunkLimit, boolean byLength, int numChunks) {
+        if (!byLength) {
+            // existing behavior when not byLength — return joined entries as single chunk list
+            return new ArrayList<>(entries);
+        }
+
+        // 1) Parse entries into atomic tokens: PROGRAM, '|', COUNTRY(3-chars), '~'
+        List<Token> tokens = new ArrayList<>();
+        for (String entry : entries) {
+            if (entry == null || entry.isEmpty()) continue;
+            int pipeIdx = entry.indexOf('|');
+            int tildeIdx = entry.lastIndexOf('~');
+            if (pipeIdx == -1 || tildeIdx == -1 || pipeIdx > tildeIdx) {
+                throw new IllegalArgumentException("Entry not in expected format (missing | or ~): " + entry);
+            }
+
+            String program = entry.substring(0, pipeIdx);
+            tokens.add(new Token(TokenType.PROGRAM, program));
+            tokens.add(new Token(TokenType.SEP_PIPE, "|"));
+
+            String countries = entry.substring(pipeIdx + 1, tildeIdx);
+            // split countries into 3-char tokens
+            for (int i = 0; i + 3 <= countries.length(); i += 3) {
+                tokens.add(new Token(TokenType.COUNTRY, countries.substring(i, i + 3)));
+            }
+            // if there's a leftover (not multiple of 3) treat it as a country token (input should avoid this)
+            if ((countries.length() % 3) != 0) {
+                tokens.add(new Token(TokenType.COUNTRY, countries.substring(countries.length() - (countries.length() % 3))));
+            }
+
+            tokens.add(new Token(TokenType.SEP_TILDE, "~"));
+        }
+
+        // 2) Pack tokens into chunks <= chunkLimit, never splitting tokens.
+        List<String> chunks = new ArrayList<>();
+        int idx = 0; // index in tokens
+        while (idx < tokens.size()) {
+            int startIdx = idx;
+            int curLen = 0;
+            List<Token> curTokens = new ArrayList<>();
+
+            // Add as many full tokens as will fit
+            while (idx < tokens.size() && curLen + tokens.get(idx).text.length() <= chunkLimit) {
+                curTokens.add(tokens.get(idx));
+                curLen += tokens.get(idx).text.length();
+                idx++;
+            }
+
+            // If we couldn't add even a single token, that token is larger than chunkLimit -> error
+            if (curTokens.isEmpty()) {
+                throw new IllegalArgumentException("Single token longer than chunk limit: " + tokens.get(idx).text);
+            }
+
+            // If next token exists and is a separator that would make the NEXT chunk start with that separator,
+            // we need to move a token from THIS chunk to the next chunk per your rules.
+            if (idx < tokens.size()) {
+                Token next = tokens.get(idx);
+                if (next.type == TokenType.SEP_PIPE) {
+                    // If next token is '|', then next chunk would start with '|' — need to move the last PROGRAM token
+                    int lastProgramPos = findLastTokenOfType(curTokens, TokenType.PROGRAM);
+                    if (lastProgramPos >= 0) {
+                        // move PROGRAM and anything after it (if any) back to the not-yet-processed stream
+                        idx = startIdx + lastProgramPos; // next iteration will reprocess from this program
+                        // truncate curTokens to exclude moved tokens
+                        curTokens.subList(lastProgramPos, curTokens.size()).clear();
+                    }
+                } else if (next.type == TokenType.SEP_TILDE) {
+                    // If next token is '~', then next chunk would start with '~' — need to move the last COUNTRY token
+                    int lastCountryPos = findLastTokenOfType(curTokens, TokenType.COUNTRY);
+                    if (lastCountryPos >= 0) {
+                        idx = startIdx + lastCountryPos; // reprocess from this country in next chunk
+                        curTokens.subList(lastCountryPos, curTokens.size()).clear();
+                    }
+                }
+            }
+
+            // Build chunk string
+            StringBuilder sb = new StringBuilder(curLen);
+            for (Token t : curTokens) sb.append(t.text);
+            chunks.add(sb.toString());
+        }
+
+        return chunks;
+    }
+
+    private static int findLastTokenOfType(List<Token> list, TokenType type) {
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (list.get(i).type == type) return i;
+        }
+        return -1;
+    }
+
+    // --- quick test driver ---
+    public static void main(String[] args) {
+        List<String> entries = Arrays.asList(
+            "P-123456789|AAABBBCCCDDD~",
+            "P-987654321|EEEFFFGGGHHHIIIJJJKKK~"
+        );
+
+        // small chunk limit to force splitting for demonstration
+        List<String> chunks = partitionChunks(entries, 20, true, 0);
+        for (int i = 0; i < chunks.size(); i++) {
+            System.out.println("CHUNK " + i + ": '" + chunks.get(i) + "' (len=" + chunks.get(i).length() + ")");
+        }
+    }
+}
