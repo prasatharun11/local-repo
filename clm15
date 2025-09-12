@@ -1,0 +1,72 @@
+private static List<String> partitionChunks(List<String> entries, int chunkLimit, boolean byLength, int numChunks) {
+    List<String> chunks = new ArrayList<>();
+
+    if (!byLength) {
+        // fallback if needed
+        return chunks;
+    }
+
+    StringBuilder currentChunk = new StringBuilder();
+    String lastProgram = null;
+    String lastCountry = null;
+
+    for (String entry : entries) {
+        int i = 0;
+        while (i < entry.length()) {
+            // Remaining capacity in current chunk
+            int remaining = chunkLimit - currentChunk.length();
+
+            // If entry fits fully in current chunk
+            if (entry.length() - i <= remaining) {
+                currentChunk.append(entry.substring(i));
+                i = entry.length();
+            } else {
+                // Cut safely
+                int end = i + remaining;
+                String slice = entry.substring(i, end);
+
+                // ✅ ensure we don’t break ProgramCode or CountryCode
+                int safeCut = findSafeCut(slice);
+
+                currentChunk.append(slice.substring(0, safeCut));
+                chunks.add(currentChunk.toString());
+                currentChunk.setLength(0);
+
+                // Handle special start cases (~ or |)
+                if (slice.charAt(safeCut) == '~' && lastCountry != null) {
+                    currentChunk.append(lastCountry);
+                } else if (slice.charAt(safeCut) == '|' && lastProgram != null) {
+                    currentChunk.append(lastProgram);
+                }
+
+                i += safeCut;
+            }
+
+            // Track last Program and Country for future corrections
+            if (entry.startsWith("P-")) {
+                lastProgram = entry;
+            } else if (entry.matches("[A-Z]{3}")) {
+                lastCountry = entry;
+            }
+        }
+    }
+
+    if (currentChunk.length() > 0) {
+        chunks.add(currentChunk.toString());
+    }
+
+    return chunks;
+}
+
+// Helper: find the nearest safe cut point
+private static int findSafeCut(String slice) {
+    int lastPipe = slice.lastIndexOf('|');
+    int lastTilde = slice.lastIndexOf('~');
+    int lastSafe = Math.max(lastPipe, lastTilde);
+
+    if (lastSafe == -1) {
+        // fallback – don’t cut in the middle of codes
+        lastSafe = slice.length();
+    }
+    return lastSafe + 1; // include delimiter
+}
