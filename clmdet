@@ -1,0 +1,162 @@
+
+Persona-Based Input Construction Rules
+
+This section describes how input parameters are constructed for each persona before being chunked and passed to the mainframe stored procedure (which supports 32,000 characters per parameter and a fixed maximum number of parameters).
+
+
+---
+
+General Format
+
+Each input record follows this structure:
+
+P-<ProgramId>|<CountryCodes>~
+
+P-<ProgramId> → Program Identifier (real or dummy depending on persona)
+
+| → Separator
+
+<CountryCodes> → One or more concatenated 3-character country codes
+
+~ → Terminator
+
+Multiple program blocks can be concatenated together:
+
+P-123456789|USA~P-987654321|CANUKG~
+
+
+
+---
+
+Rules by Persona
+
+1. Global Broker
+
+Program IDs: Real program IDs.
+
+Country Codes: Always Producing Office Country Code.
+
+Multiplicity:
+
+One or more Program IDs allowed.
+
+Each Program ID will have exactly one country code.
+
+
+Example:
+
+P-123456789|USA~P-987654321|IND~P-456789123|UKG~
+
+
+
+---
+
+2. Local Broker / Global Risk Manager / Local Risk Manager
+
+Program IDs: Real program IDs.
+
+Country Codes: Always Policy Issuing Office Country Codes.
+
+Multiplicity:
+
+One or more Program IDs allowed.
+
+Each Program ID may have multiple country codes (because multiple policies can exist per program).
+
+
+Example:
+
+P-123456789|USAINDCAN~P-987654321|UKGGERFRA~
+
+
+
+---
+
+3. Global Internal User
+
+Program IDs: Always dummy Program ID → P-000000000.
+
+Country Codes: Always Producing Office Country Codes.
+
+Multiplicity:
+
+One dummy Program ID block, followed by one or more country codes.
+
+
+Policy/Program Parameters: Policy-related parameters left blank.
+
+Mandatory Filters: At least one of:
+
+Policy Name, Policy Number, Branch Number, Case Number, Claim Number, Claim Status, Loss Date, Report Date.
+
+
+Example:
+
+P-000000000|USAINDUKG~
+
+
+
+---
+
+4. Local Internal User
+
+Program IDs: Always dummy Program ID → P-000000000.
+
+Country Codes: Always Policy Issuing Office Country Codes.
+
+Multiplicity:
+
+One dummy Program ID block, followed by one or more country codes.
+
+
+Policy/Program Parameters: Policy-related parameters left blank.
+
+Mandatory Filters: At least one of:
+
+Policy Name, Policy Number, Branch Number, Case Number, Claim Number, Claim Status, Loss Date, Report Date.
+
+
+Example:
+
+P-000000000|USAINDCAN~
+
+
+
+---
+
+Summary Matrix
+
+Persona	Program ID	Country Codes Source	Multiple Program IDs	Multiple Countries	Dummy Program ID	Mandatory Filters
+
+Global Broker	Real	Producing Office	Yes	No (1 per program)	No	No
+Local Broker	Real	Policy Issuing Office	Yes	Yes	No	No
+Global Risk Manager	Real	Policy Issuing Office	Yes	Yes	No	No
+Local Risk Manager	Real	Policy Issuing Office	Yes	Yes	No	No
+Global Internal User	Dummy (P-000…)	Producing Office	No (dummy only)	Yes	Yes	Yes (≥ 1 filter)
+Local Internal User	Dummy (P-000…)	Policy Issuing Office	No (dummy only)	Yes	Yes	Yes (≥ 1 filter)
+
+
+
+---
+
+Integration with Chunking
+
+After constructing the persona-specific input string(s), data is passed through the chunk partitioning logic.
+
+Same enforcement applies:
+
+Max 32,000 chars per chunk.
+
+Max numChunks total.
+
+No split program or country codes.
+
+Each chunk ends with | or ~.
+
+
+
+
+---
+
+👉 Would you like me to add example input vs. final stored procedure parameters (showing Param1..ParamN for, say, a Global Broker and a Local Internal User), so it’s easier for downstream consumers to understand how this flows into the mainframe?
+
