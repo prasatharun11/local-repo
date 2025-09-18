@@ -1,0 +1,67 @@
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ProgramResponse {
+    private String email;
+    private String userType;
+
+    @JsonProperty("usaPrograms")
+    private List<Program> usaPrograms;
+
+    @JsonProperty("nonUsaPrograms")
+    private List<Program> nonUsaPrograms;
+
+    @JsonProperty("issuingOfficeCountries")
+    private List<String> issuingOfficeCountries;
+
+    @JsonProperty("producingOfficeCountries")
+    private List<String> producingOfficeCountries;
+
+    public boolean isEmpty() {
+        return (email == null || email.isBlank())
+                && (userType == null || userType.isBlank())
+                && (usaPrograms == null || usaPrograms.isEmpty())
+                && (nonUsaPrograms == null || nonUsaPrograms.isEmpty())
+                && (issuingOfficeCountries == null || issuingOfficeCountries.isEmpty())
+                && (producingOfficeCountries == null || producingOfficeCountries.isEmpty());
+    }
+
+    @Data
+    public static class Program {
+        private String programID;
+        private String countryCode;
+        private String countryName;
+        private String regionName;
+        private List<Policy> policies;
+        private List<String> policyCountryCodes;
+
+        public boolean isEmpty() {
+            return (programID == null || programID.isBlank())
+                    && (countryCode == null || countryCode.isBlank())
+                    && (countryName == null || countryName.isBlank())
+                    && (regionName == null || regionName.isBlank())
+                    && (policies == null || policies.isEmpty())
+                    && (policyCountryCodes == null || policyCountryCodes.isEmpty());
+        }
+    }
+
+    @Data
+    public static class Policy {
+        private String policyId;
+        private String policyEffectiveDate;
+        private String policyCountryCode;
+
+        public boolean isEmpty() {
+            return (policyId == null || policyId.isBlank())
+                    && (policyEffectiveDate == null || policyEffectiveDate.isBlank())
+                    && (policyCountryCode == null || policyCountryCode.isBlank());
+        }
+    }
+}
