@@ -1,0 +1,15 @@
+import org.springframework.util.StringUtils;
+
+public boolean isEmpty() {
+    return (policyName == null || policyName.isBlank())
+            && (policyNumber == null || policyNumber.isBlank())
+            && (branch == null || branch.isBlank())
+            && (caseNumber == null || caseNumber.isBlank())
+            && (symbol == null || symbol.isBlank())
+            && (oclaimNumber == null || oclaimNumber.isBlank())
+            && (claimStatus == null)  // enum check
+            && (lossDate == null || lossDate.isEmpty()) 
+            && (reportDate == null || reportDate.isEmpty())
+            && (currencyCode == null || currencyCode.isBlank())
+            && (incurredCountry == null || incurredCountry.isBlank());
+}
