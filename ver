@@ -1,0 +1,111 @@
+import java.util.Arrays;
+import java.util.Collection;
+
+public final class ValidationUtils {
+
+    private ValidationUtils() {
+        // Prevent instantiation
+    }
+
+    public static boolean allEmpty(String... values) {
+        return Arrays.stream(values)
+                     .allMatch(v -> v == null || v.isBlank());
+    }
+
+    public static boolean allEmptyObjects(Object... values) {
+        return Arrays.stream(values)
+                     .allMatch(v -> {
+                         if (v == null) return true;
+                         if (v instanceof String s) return s.isBlank();
+                         if (v instanceof Collection<?> c) return c.isEmpty();
+                         return false;
+                     });
+    }
+}
+
+
+
+import static com.yourpackage.ValidationUtils.*;
+
+@JsonIgnore
+public boolean isEmpty() {
+    return allEmpty(programID, countryCode, regionName)
+        && allEmptyObjects(policies, policyCountryCodes);
+}
+
+import static com.yourpackage.ValidationUtils.*;
+
+@JsonIgnore
+public boolean isEmpty() {
+    return allEmpty(policyId, policyEffectiveDate, policyCountryCode)
+        && allEmptyObjects(policyCountryCodes);
+}
+
+
+import static com.yourpackage.ValidationUtils.*;
+
+public boolean isEmpty() {
+    return allEmpty(policyName, policyNumber, branch, caseNumber, ocClaimNumber, claimStatus)
+        && allEmptyObjects(lossDate, reportDate);
+}
+
+
+import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class ValidationUtilsTest {
+
+    @Test
+    void testAllEmpty_withNullAndBlankStrings() {
+        assertTrue(ValidationUtils.allEmpty(null, "", "   "));
+    }
+
+    @Test
+    void testAllEmpty_withNonBlankString() {
+        assertFalse(ValidationUtils.allEmpty(null, "value", ""));
+    }
+
+    @Test
+    void testAllEmpty_withAllNulls() {
+        assertTrue(ValidationUtils.allEmpty(null, null, null));
+    }
+
+    @Test
+    void testAllEmptyObjects_withNulls() {
+        assertTrue(ValidationUtils.allEmptyObjects(null, null));
+    }
+
+    @Test
+    void testAllEmptyObjects_withEmptyStrings() {
+        assertTrue(ValidationUtils.allEmptyObjects("", "   "));
+    }
+
+    @Test
+    void testAllEmptyObjects_withNonBlankString() {
+        assertFalse(ValidationUtils.allEmptyObjects("hello"));
+    }
+
+    @Test
+    void testAllEmptyObjects_withEmptyCollections() {
+        assertTrue(ValidationUtils.allEmptyObjects(Collections.emptyList(), List.of()));
+    }
+
+    @Test
+    void testAllEmptyObjects_withNonEmptyCollection() {
+        assertFalse(ValidationUtils.allEmptyObjects(List.of("item")));
+    }
+
+    @Test
+    void testAllEmptyObjects_withMixedTypesAllEmpty() {
+        assertTrue(ValidationUtils.allEmptyObjects(null, "", Collections.emptyList()));
+    }
+
+    @Test
+    void testAllEmptyObjects_withMixedTypesSomeNonEmpty() {
+        assertFalse(ValidationUtils.allEmptyObjects("", List.of("x")));
+    }
+}
