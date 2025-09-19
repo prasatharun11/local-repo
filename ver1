@@ -1,0 +1,168 @@
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Objects;
+
+public final class ValidationUtils {
+
+    private ValidationUtils() {}
+
+    public static boolean allEmpty(Object... values) {
+        return Arrays.stream(values).allMatch(ValidationUtils::isNullOrEmpty);
+    }
+
+    private static boolean isNullOrEmpty(Object obj) {
+        if (Objects.isNull(obj)) return true;
+
+        // Strings → check blank
+        if (obj instanceof String s) {
+            return s.isBlank();
+        }
+
+        // Arrays → check length
+        if (obj.getClass().isArray()) {
+            return ((Object[]) obj).length == 0;
+        }
+
+        // Try isEmpty() method if available (Collection, Map, Optional, DateRange, etc.)
+        try {
+            Method isEmptyMethod = obj.getClass().getMethod("isEmpty");
+            if (isEmptyMethod.getReturnType() == boolean.class) {
+                return (boolean) isEmptyMethod.invoke(obj);
+            }
+        } catch (Exception ignored) {
+            // No isEmpty → skip
+        }
+
+        // Otherwise → not empty
+        return false;
+    }
+}
+
+
+import static com.yourpackage.ValidationUtils.allEmpty;
+
+public class ClaimRequestModel {
+
+    private String policyName;
+    private String policyNumber;
+    private String branch;
+    private String caseNumber;
+    private String ocClaimNumber;
+    private String claimStatus;
+    private DateRange lossDate;
+    private DateRange reportDate;
+
+    // getters & setters
+
+    public boolean isEmpty() {
+        return allEmpty(
+            policyName,
+            policyNumber,
+            branch,
+            caseNumber,
+            ocClaimNumber,
+            claimStatus,
+            lossDate,
+            reportDate
+        );
+    }
+}
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.List;
+import static com.yourpackage.ValidationUtils.allEmpty;
+
+public class Policy {
+
+    private String policyId;
+    private String policyEffectiveDate;
+    private String policyCountryCode;
+    private List<String> policyCountryCodes;
+
+    // getters & setters
+
+    @JsonIgnore
+    public boolean isEmpty() {
+        return allEmpty(
+            policyId,
+            policyEffectiveDate,
+            policyCountryCode,
+            policyCountryCodes
+        );
+    }
+}
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.List;
+import static com.yourpackage.ValidationUtils.allEmpty;
+
+public class Program {
+
+    private String programID;
+    private String countryCode;
+    private String regionName;
+    private List<Policy> policies;
+    private List<String> policyCountryCodes;
+
+    // getters & setters
+
+    @JsonIgnore
+    public boolean isEmpty() {
+        return allEmpty(
+            programID,
+            countryCode,
+            regionName,
+            policies,
+            policyCountryCodes
+        );
+    }
+}
+
+
+import org.junit.jupiter.api.Test;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import static org.junit.jupiter.api.Assertions.*;
+
+class ValidationUtilsTest {
+
+    @Test
+    void testAllEmpty_withNulls() {
+        assertTrue(ValidationUtils.allEmpty(null, null));
+    }
+
+    @Test
+    void testAllEmpty_withBlankStrings() {
+        assertTrue(ValidationUtils.allEmpty("", "   "));
+    }
+
+    @Test
+    void testAllEmpty_withNonBlankString() {
+        assertFalse(ValidationUtils.allEmpty("hello"));
+    }
+
+    @Test
+    void testAllEmpty_withCollections() {
+        assertTrue(ValidationUtils.allEmpty(List.of(), Map.of()));
+        assertFalse(ValidationUtils.allEmpty(List.of("x")));
+    }
+
+    @Test
+    void testAllEmpty_withOptional() {
+        assertTrue(ValidationUtils.allEmpty(Optional.empty()));
+        assertFalse(ValidationUtils.allEmpty(Optional.of("value")));
+    }
+
+    @Test
+    void testAllEmpty_withArrays() {
+        assertTrue(ValidationUtils.allEmpty(new String[]{}));
+        assertFalse(ValidationUtils.allEmpty(new String[]{"a"}));
+    }
+
+    @Test
+    void testAllEmpty_withCustomObjectHavingIsEmpty() {
+        DateRange range = new DateRange(null, null);
+        assertTrue(ValidationUtils.allEmpty(range));
+    }
+}
