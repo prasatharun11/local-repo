@@ -1,0 +1,53 @@
+import java.lang.reflect.Method;
+import java.util.*;
+
+public final class ValidationUtils {
+
+    private ValidationUtils() {}
+
+    public static boolean allEmpty(Object... values) {
+        return Arrays.stream(values).allMatch(ValidationUtils::isNullOrEmpty);
+    }
+
+    private static boolean isNullOrEmpty(Object obj) {
+        if (Objects.isNull(obj)) return true;
+
+        // Strings → check blank
+        if (obj instanceof String s) {
+            return s.isBlank();
+        }
+
+        // Collections → check size
+        if (obj instanceof Collection<?> c) {
+            return c.isEmpty();
+        }
+
+        // Maps → check size
+        if (obj instanceof Map<?, ?> m) {
+            return m.isEmpty();
+        }
+
+        // Optionals → check empty
+        if (obj instanceof Optional<?> o) {
+            return o.isEmpty();
+        }
+
+        // Arrays → check length (works for primitives + objects)
+        if (obj.getClass().isArray()) {
+            return java.lang.reflect.Array.getLength(obj) == 0;
+        }
+
+        // Custom isEmpty() methods (like DateRange, custom models)
+        try {
+            Method isEmptyMethod = obj.getClass().getMethod("isEmpty");
+            if (isEmptyMethod.getReturnType() == boolean.class) {
+                return (boolean) isEmptyMethod.invoke(obj);
+            }
+        } catch (Exception ignored) {
+            // No isEmpty → skip
+        }
+
+        // Otherwise → not empty
+        return false;
+    }
+}
