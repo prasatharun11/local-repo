@@ -1,0 +1,185 @@
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class ModelTests {
+
+    // ---------------------------
+    // ValidationUtils Tests
+    // ---------------------------
+    @Nested
+    class ValidationUtilsTests {
+
+        @Test
+        void testAllEmpty_withNulls() {
+            assertTrue(ValidationUtils.allEmpty(null, null));
+        }
+
+        @Test
+        void testAllEmpty_withBlankStrings() {
+            assertTrue(ValidationUtils.allEmpty("", "   "));
+        }
+
+        @Test
+        void testAllEmpty_withNonBlankString() {
+            assertFalse(ValidationUtils.allEmpty("hello"));
+        }
+
+        @Test
+        void testAllEmpty_withCollections() {
+            assertTrue(ValidationUtils.allEmpty(List.of(), Map.of()));
+            assertFalse(ValidationUtils.allEmpty(List.of("x")));
+        }
+
+        @Test
+        void testAllEmpty_withOptional() {
+            assertTrue(ValidationUtils.allEmpty(Optional.empty()));
+            assertFalse(ValidationUtils.allEmpty(Optional.of("value")));
+        }
+
+        @Test
+        void testAllEmpty_withArrays() {
+            assertTrue(ValidationUtils.allEmpty(new String[]{}));
+            assertFalse(ValidationUtils.allEmpty(new String[]{"a"}));
+        }
+
+        @Test
+        void testAllEmpty_withCustomObjectHavingIsEmpty() {
+            DateRange range = new DateRange(null, null);
+            assertTrue(ValidationUtils.allEmpty(range));
+        }
+    }
+
+    // ---------------------------
+    // DateRange Tests
+    // ---------------------------
+    @Nested
+    class DateRangeTests {
+
+        @Test
+        void testIsEmpty_whenBothNull() {
+            DateRange range = new DateRange(null, null);
+            assertTrue(range.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenBothBlank() {
+            DateRange range = new DateRange(" ", "");
+            assertTrue(range.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenFromDateNotEmpty() {
+            DateRange range = new DateRange("2025-01-01", null);
+            assertFalse(range.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenToDateNotEmpty() {
+            DateRange range = new DateRange(null, "2025-01-10");
+            assertFalse(range.isEmpty());
+        }
+    }
+
+    // ---------------------------
+    // ClaimRequestModel Tests
+    // ---------------------------
+    @Nested
+    class ClaimRequestModelTests {
+
+        @Test
+        void testIsEmpty_whenAllFieldsNull() {
+            ClaimRequestModel model = new ClaimRequestModel();
+            assertTrue(model.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenStringsSet() {
+            ClaimRequestModel model = new ClaimRequestModel();
+            model.setPolicyName("POL123");
+            assertFalse(model.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenLossDateNotEmpty() {
+            ClaimRequestModel model = new ClaimRequestModel();
+            model.setLossDate(new DateRange("2025-01-01", null));
+            assertFalse(model.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenReportDateNotEmpty() {
+            ClaimRequestModel model = new ClaimRequestModel();
+            model.setReportDate(new DateRange(null, "2025-01-15"));
+            assertFalse(model.isEmpty());
+        }
+    }
+
+    // ---------------------------
+    // Policy Tests
+    // ---------------------------
+    @Nested
+    class PolicyTests {
+
+        @Test
+        void testIsEmpty_whenAllFieldsNull() {
+            Policy policy = new Policy();
+            assertTrue(policy.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenPolicyIdSet() {
+            Policy policy = new Policy();
+            policy.setPolicyId("POL123");
+            assertFalse(policy.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenCountryCodesNotEmpty() {
+            Policy policy = new Policy();
+            policy.setPolicyCountryCodes(List.of("US"));
+            assertFalse(policy.isEmpty());
+        }
+    }
+
+    // ---------------------------
+    // Program Tests
+    // ---------------------------
+    @Nested
+    class ProgramTests {
+
+        @Test
+        void testIsEmpty_whenAllFieldsNull() {
+            Program program = new Program();
+            assertTrue(program.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenProgramIdSet() {
+            Program program = new Program();
+            program.setProgramID("PRG123");
+            assertFalse(program.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenPoliciesNotEmpty() {
+            Program program = new Program();
+            Policy policy = new Policy();
+            policy.setPolicyId("POL123");
+            program.setPolicies(List.of(policy));
+            assertFalse(program.isEmpty());
+        }
+
+        @Test
+        void testIsEmpty_whenCountryCodesNotEmpty() {
+            Program program = new Program();
+            program.setPolicyCountryCodes(List.of("IN"));
+            assertFalse(program.isEmpty());
+        }
+    }
+}
