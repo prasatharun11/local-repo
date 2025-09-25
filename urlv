@@ -1,0 +1,28 @@
+import java.net.*;
+import java.util.regex.Pattern;
+
+public class SafeUrlBuilder {
+    // Veracode-friendly allow-list regex
+    private static final Pattern OKTA_DOMAIN_PATTERN = Pattern.compile(
+        "^(devabctech\\.oktapreview\\.com|qaabctech\\.oktapreview\\.com|uatabctech\\.oktapreview\\.com|abctech\\.okta\\.com)$"
+    );
+
+    public static URL buildOktaUrl(String domain, String authServerId) throws Exception {
+        // Validate domain against allow-list
+        if (!OKTA_DOMAIN_PATTERN.matcher(domain).matches()) {
+            throw new IllegalArgumentException("Invalid Okta domain: " + domain);
+        }
+
+        String tokenUrl = String.format("https://%s/oauth2/%s/v1/token", domain, authServerId);
+
+        URL url = new URL(tokenUrl);
+
+        // Extra hardening against localhost/private IP tricks
+        InetAddress address = InetAddress.getByName(url.getHost());
+        if (address.isLoopbackAddress() || address.isSiteLocalAddress()) {
+            throw new IllegalArgumentException("Blocked internal/private address: " + domain);
+        }
+
+        return url;
+    }
+}
