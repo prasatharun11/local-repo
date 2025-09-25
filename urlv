@@ -26,3 +26,10 @@ public class SafeUrlBuilder {
         return url;
     }
 }
+
+
+URL url = SafeUrlBuilder.buildOktaUrl(OKTA_DOMAIN, OKTA_AUTH_SERVER_ID);
+HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+conn.setInstanceFollowRedirects(false);
+conn.setConnectTimeout(5000);
+conn.setReadTimeout(5000);
