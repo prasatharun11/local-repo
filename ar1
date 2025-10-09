@@ -1,0 +1,137 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.0'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'jacoco'
+}
+
+group = 'com.yourcompany'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = '17'
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('springCloudVersion', "2023.0.0")
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
+
+dependencies {
+    // Spring Boot Starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-web-services'
+    implementation 'org.springframework.boot:spring-boot-starter-hateoas'
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    
+    // Spring Cloud
+    implementation 'org.springframework.cloud:spring-cloud-starter-config:4.1.3'
+    implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap'
+    
+    // Spring Core & Data
+    implementation 'org.springframework:spring-core'
+    implementation 'org.springframework:spring-context'
+    implementation 'org.springframework:spring-beans'
+    implementation 'org.springframework.data:spring-data-commons'
+    
+    // Web Services
+    implementation 'org.springframework.ws:spring-ws-core'
+    implementation 'org.springframework.ws:spring-ws-security'
+    
+    // Database
+    implementation 'com.oracle.database.jdbc:ojdbc11:23.5.0.24.07'
+    implementation files('WEB-INF/lib/db2jcc_license_cisuz.jar')
+    implementation files('WEB-INF/lib/db2jcc4.jar')
+    
+    // Security & Validation
+    implementation 'org.springframework.security:spring-security-core'
+    implementation 'org.springframework.security:spring-security-web'
+    implementation 'org.springframework.security:spring-security-config'
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api'
+    implementation 'jakarta.validation:jakarta.validation-api'
+    implementation 'org.hibernate.validator:hibernate-validator'
+    implementation 'io.jsonwebtoken:jjwt:0.9.1'
+    implementation 'org.owasp.encoder:encoder:1.3.1'
+    implementation files('WEB-INF/lib/wfauthentication.jar')
+    
+    // Utilities
+    implementation 'org.modelmapper:modelmapper:3.2.1'
+    implementation 'org.apache.commons:commons-lang3'
+    implementation 'org.apache.commons:commons-collections4:4.4'
+    implementation 'commons-codec:commons-codec:1.17.1'
+    
+    // JAX-RS & Jersey
+    implementation 'jakarta.ws.rs:jakarta.ws.rs-api:4.0.0'
+    implementation 'org.glassfish.jersey.core:jersey-client'
+    implementation 'org.glassfish.jersey.inject:jersey-hk2'
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    
+    // JaCoCo for code coverage
+    jacocoAgent 'org.jacoco:org.jacoco.agent:0.8.12'
+    jacocoAnt 'org.jacoco:org.jacoco.ant:0.8.12'
+    jacocoRuntime 'org.jacoco:org.jacoco.agent:0.8.12:runtime'
+    
+    // SonarQube JaCoCo plugin
+    implementation 'org.sonarsource.jacoco:sonar-jacoco-plugin:1.3.0.1538'
+    
+    // Test dependencies
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+    testImplementation 'org.springframework.ws:spring-ws-test'
+}
+
+configurations {
+    all {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+}
+
+test {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.8
+            }
+        }
+    }
+}
+
+bootJar {
+    archiveFileName = "${project.name}.jar"
+}
