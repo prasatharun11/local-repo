@@ -1,0 +1,34 @@
+-- First, identify which policy numbers have too many country codes
+SELECT 
+    policy_no,
+    COUNT(DISTINCT country_alpha_3_cd) AS issuing_office_count,
+    COUNT(DISTINCT producing_office_country_cd) AS producing_office_count
+FROM policy_tbl
+GROUP BY policy_no
+HAVING COUNT(DISTINCT country_alpha_3_cd) > 100 
+    OR COUNT(DISTINCT producing_office_country_cd) > 100
+ORDER BY issuing_office_count DESC, producing_office_count DESC;
+
+
+SELECT 
+    policy_no,
+    SUBSTR(LISTAGG(DISTINCT country_alpha_3_cd, ',') WITHIN GROUP (ORDER BY country_alpha_3_cd), 1, 4000) AS issuing_office_country_codes,
+    SUBSTR(LISTAGG(DISTINCT producing_office_country_cd, ',') WITHIN GROUP (ORDER BY producing_office_country_cd), 1, 4000) AS producing_office_country_codes
+FROM policy_tbl
+GROUP BY policy_no
+ORDER BY policy_no;
+
+
+SELECT 
+    policy_no,
+    RTRIM(XMLSERIALIZE(
+        XMLAGG(XMLELEMENT(NAME "x", DISTINCT country_alpha_3_cd || ','))
+        AS VARCHAR(10000)
+    ), ',') AS issuing_office_country_codes,
+    RTRIM(XMLSERIALIZE(
+        XMLAGG(XMLELEMENT(NAME "x", DISTINCT producing_office_country_cd || ','))
+        AS VARCHAR(10000)
+    ), ',') AS producing_office_country_codes
+FROM policy_tbl
+GROUP BY policy_no
+ORDER BY policy_no;
