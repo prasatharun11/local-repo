@@ -1,0 +1,39 @@
+SELECT 
+    POLICY_NO,
+    CAST(
+        RTRIM(
+            REPLACE(
+                REPLACE(
+                    XMLSERIALIZE(
+                        CONTENT 
+                        XMLAGG(XMLELEMENT(NAME E, ISSUING_OFFICE_COUNTRY_CODE || ', ') )
+                        AS VARCHAR(10000)
+                    ),
+                    '<E>', ''
+                ),
+                '</E>', ''
+            ),
+            ', '
+        ) AS VARCHAR(10000)
+    ) AS ISSUING_COUNTRIES,
+    CAST(
+        RTRIM(
+            REPLACE(
+                REPLACE(
+                    XMLSERIALIZE(
+                        CONTENT 
+                        XMLAGG(XMLELEMENT(NAME E, PRODUCING_OFFICE_COUNTRY_CODE || ', ') )
+                        AS VARCHAR(10000)
+                    ),
+                    '<E>', ''
+                ),
+                '</E>', ''
+            ),
+            ', '
+        ) AS VARCHAR(10000)
+    ) AS PRODUCING_COUNTRIES
+FROM (
+    SELECT DISTINCT POLICY_NO, ISSUING_OFFICE_COUNTRY_CODE, PRODUCING_OFFICE_COUNTRY_CODE
+    FROM POLICY_TABLE
+) X
+GROUP BY POLICY_NO;
