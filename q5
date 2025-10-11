@@ -1,0 +1,7 @@
+SELECT 
+    policy_no,
+    LISTAGG(DISTINCT NULLIF(country_alpha_3_cd, ''), ',') WITHIN GROUP (ORDER BY country_alpha_3_cd) AS issuing_office_country_codes,
+    LISTAGG(DISTINCT NULLIF(producing_office_country_cd, ''), ',') WITHIN GROUP (ORDER BY producing_office_country_cd) AS producing_office_country_codes
+FROM policy_tbl
+GROUP BY policy_no
+ORDER BY policy_no;
