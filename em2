@@ -1,0 +1,26 @@
+Of course. Here is the revised version based on Option 2, incorporating your excellent points about the filter's purpose and the user-specific behavior. This makes the reasoning even stronger and more logical for the UI team.
+
+---
+
+Revised Option 2: Direct & Logical
+
+Subject: Urgent Fix: Mandatory Claim Status Filter for Internal Users
+
+Message:
+
+UI Team,
+
+The "Claim Status" filter must always send a value for Global/Local Internal users. Currently, selecting "All" sends a null value. This forces the system to pull the entire dataset, which completely defeats the purpose of having the filter and causes major performance issues.
+
+To solve this huge data load, we made this filter mandatory for internal users at the service level.
+
+Required Fix:
+For Global/Local Internal users,ensure the Claim Status filter always sends one of these values:
+
+· "Open" -> Send value 0
+· "Closed" -> Send value C
+· "All" -> This selection must also send a value. Let's discuss the best approach (e.g., sending both 0,C or a specific "All" flag).
+
+Note: For other user personas, it's fine if the filter sends nothing, as the service will treat it as "no filter."
+
+This is a critical performance fix (Ref: US729195). Please implement this promptly.
