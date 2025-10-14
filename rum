@@ -1,0 +1,45 @@
+function onInitSplunkRum() {
+  Splunk.init({
+    // === Basic setup ===
+    beaconUrl: 'https://rum-ingest.us0.signalfx.com/v1/rum',
+    rumAuth: 'YOUR_RUM_AUTH_TOKEN',
+    app: 'your-app-name',
+    deploymentEnvironment: 'production',
+
+    // === Error filtering & modification ===
+    onError: (error, context) => {
+      // 🧩 Example 1: ignore network errors (avoid noise)
+      if (error?.message?.includes('NetworkError')) {
+        return null; // prevents sending to Splunk
+      }
+
+      // 🧩 Example 2: modify message for grouped reporting
+      if (error?.message?.includes('fetch failed')) {
+        error.message = 'Unified fetch error';
+      }
+
+      // 🧩 Example 3: add custom context tags
+      context.attributes = {
+        ...context.attributes,
+        source: 'frontend',
+        environment: 'production',
+      };
+
+      // Must return both error and context if keeping it
+      return [error, context];
+    },
+
+    // === Disable DOM instrumentation (avoids inline style injection) ===
+    instrumentations: {
+      document: false,     // disables DOM tracking
+      interaction: false,  // disables UI click tracking
+      fetch: true,
+      xhr: true,
+      navigation: true,
+      longtask: true,
+    },
+  });
+
+  // ❌ Disable session recorder (causes inline <style> injection)
+  // SplunkSessionRecorder.init({...});  // ← omit this if CSP violation occurs
+}
