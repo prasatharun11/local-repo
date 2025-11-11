@@ -1,0 +1,56 @@
+<!-- Include Pako for gzip decompression -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+
+<script>
+function base64ToUint8Array(base64) {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+}
+
+function decompressBase64Gzip(base64Data) {
+    try {
+        const compressedBytes = base64ToUint8Array(base64Data);
+        const decompressedBytes = pako.ungzip(compressedBytes);
+        const decoder = new TextDecoder("utf-8");
+        return decoder.decode(decompressedBytes);
+    } catch (e) {
+        console.error("❌ Failed to decompress:", e);
+        return null;
+    }
+}
+
+$.ajax({
+    url: "/api/getCompressedData",
+    type: "GET",
+    dataType: "text", // ⛔ Important! Expect plain text, not JSON
+    success: function (response) {
+        console.log("Raw response:", response);
+
+        // Step 1: Decompress the Base64+GZIP string
+        const decompressed = decompressBase64Gzip(response);
+
+        // Step 2: Parse JSON
+        let data = {};
+        try {
+            data = JSON.parse(decompressed);
+        } catch (err) {
+            console.error("❌ JSON Parse Error:", err);
+        }
+
+        // Step 3: Use decompressed data
+        console.log("✅ Decoded JSON:", data);
+        $("#output").text(JSON.stringify(data, null, 2));
+    },
+    error: function (xhr, status, error) {
+        console.error("❌ AJAX Error:", status, error);
+        console.log(xhr.responseText);
+    }
+});
+</script>
+
+<pre id="output"></pre>
