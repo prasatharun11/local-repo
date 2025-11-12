@@ -1,0 +1,66 @@
+// In your utility file
+(function() {
+    // Store original method
+    var originalAjax = $.ajax;
+    
+    // Override the method
+    $.ajax = function(url, options) {
+        // Handle different parameter patterns
+        if (typeof url === 'object') {
+            options = url;
+        } else {
+            options = options || {};
+            options.url = url;
+        }
+        
+        // Store original callbacks
+        var userSuccess = options.success;
+        var userError = options.error;
+        var userComplete = options.complete;
+        
+        // Override success - but only if we have common logic to add
+        if (userSuccess || true) { // Remove "|| true" if no common success logic
+            options.success = function(data, textStatus, jqXHR) {
+                // Your common success logic FIRST
+                console.log('AJAX Setup Success: Request completed successfully');
+                // Add your common success operations here
+                
+                // Then call original success if provided
+                if (typeof userSuccess === 'function') {
+                    userSuccess(data, textStatus, jqXHR);
+                }
+            };
+        }
+        
+        // Override error - but only if we have common logic to add
+        if (userError || true) { // Remove "|| true" if no common error logic
+            options.error = function(jqXHR, textStatus, errorThrown) {
+                // Your common error logic FIRST
+                console.log('AJAX Setup Error: Request failed');
+                // Add your common error operations here
+                
+                // Then call original error if provided
+                if (typeof userError === 'function') {
+                    userError(jqXHR, textStatus, errorThrown);
+                }
+            };
+        }
+        
+        // Override complete - but only if we have common logic to add
+        if (userComplete || true) { // Remove "|| true" if no common complete logic
+            options.complete = function(jqXHR, textStatus) {
+                // Your common complete logic FIRST
+                console.log('AJAX Setup Complete: Request finished');
+                // Add your common complete operations here
+                
+                // Then call original complete if provided
+                if (typeof userComplete === 'function') {
+                    userComplete(jqXHR, textStatus);
+                }
+            };
+        }
+        
+        // Call ORIGINAL AJAX method (not $.ajax which would cause recursion)
+        return originalAjax.call(this, options);
+    };
+})();
