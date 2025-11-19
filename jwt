@@ -1,0 +1,119 @@
+package com.example.security;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.*;
+import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.web.SecurityFilterChain;
+
+import java.time.Instant;
+
+@Configuration
+public class SecurityConfig {
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
+
+    @Value("${app.jwt.expected-issuer}")
+    private String expectedIssuer;
+
+    @Value("${app.jwt.expected-audience}")
+    private String expectedAudience;
+
+    @Value("${app.jwt.clock-skew-seconds:60}")
+    private long clockSkewSeconds;
+
+
+    @Bean
+    public JwtDecoder jwtDecoder() {
+
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+
+        OAuth2TokenValidator<Jwt> customValidator = jwt -> {
+
+            Instant now = Instant.now().minusSeconds(clockSkewSeconds);
+
+            // --------- EXPIRY VALIDATION ---------
+            if (jwt.getExpiresAt() == null || jwt.getExpiresAt().isBefore(now)) {
+                return failure("Token is expired");
+            }
+
+            // --------- NOT BEFORE VALIDATION ---------
+            if (jwt.getNotBefore() != null && jwt.getNotBefore().isAfter(Instant.now().plusSeconds(clockSkewSeconds))) {
+                return failure("Token not valid yet");
+            }
+
+            // --------- ISSUER VALIDATION ---------
+            if (jwt.getIssuer() == null || !expectedIssuer.equals(jwt.getIssuer().toString())) {
+                return failure("Invalid issuer");
+            }
+
+            // --------- AUDIENCE VALIDATION ---------
+            if (jwt.getAudience() == null || !jwt.getAudience().contains(expectedAudience)) {
+                return failure("Invalid audience");
+            }
+
+            // --------- REQUIRED CLAIMS ---------
+            String[] requiredClaims = { "ver", "jti", "cid", "uid", "auth_time" };
+            for (String claim : requiredClaims) {
+                if (!jwt.containsClaim(claim)) {
+                    return failure("Missing required claim: " + claim);
+                }
+            }
+
+            // --------- AUTH_TIME VALIDATION ---------
+            long authTime = jwt.getClaimAsLong("auth_time");
+            if (authTime > Instant.now().getEpochSecond() + clockSkewSeconds) {
+                return failure("auth_time cannot be in the future");
+            }
+
+            return OAuth2TokenValidatorResult.success();
+        };
+
+        decoder.setJwtValidator(customValidator);
+        return decoder;
+    }
+
+
+    private OAuth2TokenValidatorResult failure(String msg) {
+        return OAuth2TokenValidatorResult.failure(
+                new OAuth2Error("invalid_token", msg, null)
+        );
+    }
+
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
+        http
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .cors(Customizer.withDefaults())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/public/**", "/actuator/health").permitAll()
+                .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()));
+
+        return http.build();
+    }
+}
+
+
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: https://issuer.example.com/.well-known/jwks.json
+
+app:
+  jwt:
+    expected-issuer: "https://issuer.example.com"
+    expected-audience: "my-api"
+    clock-skew-seconds: 60  # optional: allow 60s drift
