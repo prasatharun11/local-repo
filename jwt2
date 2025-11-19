@@ -1,0 +1,87 @@
+package com.example.security;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.*;
+import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+public class SecurityConfig {
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
+
+    @Value("${app.jwt.expected-issuer}")
+    private String expectedIssuer;
+
+    @Value("${app.jwt.expected-audience}")
+    private String expectedAudience;
+
+    @Bean
+    public JwtDecoder jwtDecoder() {
+
+        // Use Nimbus with JWKS (best option for RS256 + kid)
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+
+        // Custom validator for your required claims only
+        OAuth2TokenValidator<Jwt> customValidator = jwt -> {
+
+            // ISSUER
+            if (jwt.getIssuer() == null || 
+                !jwt.getIssuer().toString().equals(expectedIssuer)) {
+                return failure("Invalid issuer");
+            }
+
+            // AUDIENCE
+            if (jwt.getAudience() == null || 
+                !jwt.getAudience().contains(expectedAudience)) {
+                return failure("Invalid audience");
+            }
+
+            // REQUIRED CLAIMS
+            String[] required = { "ver", "jti", "cid", "uid", "auth_time" };
+            for (String claim : required) {
+                if (!jwt.containsClaim(claim)) {
+                    return failure("Missing required claim: " + claim);
+                }
+            }
+
+            // (Spring Security automatically validates exp + nbf)
+
+            return OAuth2TokenValidatorResult.success();
+        };
+
+        // Attach ONLY the custom validator
+        decoder.setJwtValidator(customValidator);
+
+        return decoder;
+    }
+
+    private OAuth2TokenValidatorResult failure(String message) {
+        return OAuth2TokenValidatorResult.failure(
+                new OAuth2Error("invalid_token", message, null)
+        );
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
+        http
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(sm -> 
+                sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .cors(Customizer.withDefaults())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/public/**", "/actuator/health").permitAll()
+                .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()));
+
+        return http.build();
+    }
+}
