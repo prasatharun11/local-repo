@@ -1,0 +1,45 @@
+$.ajax({
+  type: "POST",
+  url: url,
+  data: jdata,
+  success: function (response) {
+    // Validate response before processing
+    if (!response || typeof response !== 'string') {
+      showGSErrorMessage(true, "Invalid response received");
+      return;
+    }
+    
+    // open the popup
+    var w = window.open("");
+    
+    // Wait for popup to load
+    w.onload = function() {
+      // Sanitize the response before writing
+      const sanitizedContent = customSanitizeScripts(response);
+      
+      // Create a Trusted Types policy if supported
+      if (w.trustedTypes) {
+        try {
+          const policy = w.trustedTypes.createPolicy("dynamicContent", {
+            createHTML: (input) => customSanitizeScripts(input)
+          });
+          w.document.write(policy.createHTML(sanitizedContent));
+        } catch (e) {
+          // Fallback: Use DOMPurify or other robust sanitizer
+          const purified = DOMPurify.sanitize(sanitizedContent);
+          w.document.write(purified);
+        }
+      } else {
+        // Fallback without Trusted Types
+        const purified = DOMPurify.sanitize(sanitizedContent);
+        w.document.write(purified);
+      }
+    };
+  },
+  error: function (data) {
+    showGSErrorMessage(true, MSG_GENERAL_ERROR_MSG);
+  },
+  complete: function (xhr, options) {
+    showGSProgressBar(false);
+  }
+});
