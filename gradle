@@ -1,0 +1,117 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    // BOM / platform versions
+    springCloudVersion      = '5.0.0'
+    log4jVersion            = '2.25.2'
+
+    // Third-party libraries
+    caffeineVersion         = '3.2.3'
+    modelMapperVersion      = '3.2.6'
+    poiVersion              = '5.5.1'
+    commonsLangVersion      = '3.20.0'
+    commonsCollectionsVersion = '4.5.0'
+    hikariVersion           = '7.0.2'
+    bouncyCastleVersion     = '1.83'         // bcprov-jdk18on
+    spotbugsVersion         = '4.9.8'
+    lombokVersion           = '1.18.42'
+    javaJwtVersion          = '4.5.0'
+    jjwtVersion             = '0.13.0'
+    springRestdocsVersion   = '3.0.3'
+    jacocoVersion           = '0.8.14'
+    sonarJacocoPluginVersion = '1.3.0.1538'
+}
+
+dependencyManagement {
+    imports {
+        // Spring Boot’s BOM is imported automatically by the Boot plugin.
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        mavenBom "org.apache.logging.log4j:log4j-bom:${log4jVersion}"
+    }
+}
+
+dependencies {
+    // --- Spring Boot / Spring Cloud / Spring Data ---
+    implementation 'org.springframework.boot:spring-boot-starter-hateoas'
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    implementation 'org.springframework.cloud:spring-cloud-starter-config'
+    implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.data:spring-data-commons:4.0.0'
+
+    // --- Mapping / Caching ---
+    implementation "com.github.ben-manes.caffeine:caffeine:${caffeineVersion}"
+    implementation "org.modelmapper:modelmapper:${modelMapperVersion}"
+
+    // --- Jakarta / Validation (versions managed mostly by Boot BOM) ---
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api'
+    implementation 'jakarta.validation:jakarta.validation-api'
+    implementation 'org.hibernate.validator:hibernate-validator'
+    implementation 'jakarta.ws.rs:jakarta.ws.rs-api:4.0.0'
+
+    // --- Apache Commons ---
+    implementation "org.apache.commons:commons-lang3:${commonsLangVersion}"
+    implementation "org.apache.commons:commons-collections4:${commonsCollectionsVersion}"
+
+    // --- Security / JWT ---
+    implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+    runtimeOnly   "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+    runtimeOnly   "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+
+    implementation "com.auth0:java-jwt:${javaJwtVersion}"
+    implementation "org.bouncycastle:bcprov-jdk18on:${bouncyCastleVersion}"
+
+    // --- DB / JDBC helpers ---
+    implementation "com.zaxxer:HikariCP:${hikariVersion}"
+    implementation "org.apache.poi:poi-ooxml:${poiVersion}"
+
+    // --- Static analysis / annotations ---
+    compileOnly   "com.github.spotbugs:spotbugs-annotations:${spotbugsVersion}"
+
+    // --- Lombok (compile + test) ---
+    compileOnly           "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor   "org.projectlombok:lombok:${lombokVersion}"
+    testCompileOnly       "org.projectlombok:lombok:${lombokVersion}"
+    testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    // --- Logging (Log4j2 via BOM) ---
+    implementation 'org.apache.logging.log4j:log4j-slf4j2-impl'
+
+    // --- Test / Docs ---
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation "org.springframework.restdocs:spring-restdocs-mockmvc:${springRestdocsVersion}"
+
+    // --- Code coverage / Sonar ---
+    testImplementation "org.jacoco:org.jacoco.agent:${jacocoVersion}"
+    testImplementation "org.jacoco:org.jacoco.ant:${jacocoVersion}"
+    testRuntimeOnly   "org.jacoco:org.jacoco.agent:${jacocoVersion}:runtime"
+
+    implementation "org.sonarsource.jacoco:sonar-jacoco-plugin:${sonarJacocoPluginVersion}"
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+jacoco {
+    toolVersion = jacocoVersion
+}
