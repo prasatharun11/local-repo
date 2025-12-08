@@ -1,0 +1,195 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.6'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+}
+
+apply plugin: 'io.spring.dependency-management'
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+// Replace with your company's JFrog Artifactory URL
+def artifactoryUrl = 'https://your-company.jfrog.io/artifactory'
+def artifactoryRepo = 'gradle-release' // or 'libs-release', 'maven-release', etc.
+
+repositories {
+    // Your company's JFrog Artifactory
+    maven {
+        url "${artifactoryUrl}/${artifactoryRepo}"
+        // Credentials should be in gradle.properties or environment variables
+    }
+    
+    // Fallback repositories (optional)
+    mavenCentral()
+}
+
+ext {
+    versions = [
+        // Spring
+        springBoot: '3.5.6',
+        springCloud: '2024.0.0',
+        
+        // Database & Connection Pool
+        hikariCP: '6.2.1',
+        
+        // Mapping & Validation
+        modelmapper: '3.2.2',
+        hibernateValidator: '8.0.2.Final',
+        
+        // Security & JWT
+        jjwt: '0.12.6',
+        javaJwt: '4.4.0',
+        owaspEncoder: '1.3.2',
+        
+        // Apache Commons
+        commonsLang3: '3.17.0',
+        commonsCollections4: '4.5.0-M1',
+        
+        // Excel Processing
+        poi: '5.3.0',
+        
+        // Caching
+        caffeine: '3.1.8',
+        
+        // Logging
+        log4j: '2.24.1',
+        
+        // Code Quality
+        sonarJacoco: '1.3.0.1538',
+        spotbugs: '4.8.6',
+        
+        // Jakarta
+        jakartaXmlBind: '4.0.2',
+        jakartaValidation: '3.0.2',
+        jakartaWsRs: '3.1.0',
+        
+        // Testing & Documentation
+        springRestdocs: '3.0.2',
+        
+        // Code Coverage
+        jacoco: '0.8.12',
+        
+        // Lombok
+        lombok: '1.18.34'
+    ]
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${versions.springBoot}"
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${versions.springCloud}"
+    }
+}
+
+configurations {
+    // Exclude default logging
+    all {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+}
+
+dependencies {
+    // Spring Boot Starters
+    implementation 'org.springframework.boot:spring-boot-starter-hateoas'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    
+    // Spring Cloud
+    implementation 'org.springframework.cloud:spring-cloud-starter-config'
+    implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap'
+    
+    // Spring Data
+    implementation 'org.springframework.data:spring-data-commons'
+    
+    // Database & Connection Pool
+    implementation "com.zaxxer:HikariCP:${versions.hikariCP}"
+    
+    // Mapping & Validation
+    implementation "org.modelmapper:modelmapper:${versions.modelmapper}"
+    implementation "jakarta.xml.bind:jakarta.xml.bind-api:${versions.jakartaXmlBind}"
+    implementation "jakarta.validation:jakarta.validation-api:${versions.jakartaValidation}"
+    implementation "org.hibernate.validator:hibernate-validator:${versions.hibernateValidator}"
+    
+    // Security & JWT
+    implementation "io.jsonwebtoken:jjwt-api:${versions.jjwt}"
+    runtimeOnly "io.jsonwebtoken:jjwt-impl:${versions.jjwt}"
+    runtimeOnly "io.jsonwebtoken:jjwt-jackson:${versions.jjwt}"
+    implementation "com.auth0:java-jwt:${versions.javaJwt}"
+    implementation "org.owasp.encoder:encoder:${versions.owaspEncoder}"
+    
+    // Apache Commons
+    implementation "org.apache.commons:commons-lang3:${versions.commonsLang3}"
+    implementation "org.apache.commons:commons-collections4:${versions.commonsCollections4}"
+    
+    // Excel Processing
+    implementation "org.apache.poi:poi-ooxml:${versions.poi}"
+    
+    // Caching
+    implementation "com.github.ben-manes.caffeine:caffeine:${versions.caffeine}"
+    
+    // Jakarta REST
+    implementation "jakarta.ws.rs:jakarta.ws.rs-api:${versions.jakartaWsRs}"
+    
+    // Code Quality
+    implementation "org.sonarsource.jacoco:sonar-jacoco-plugin:${versions.sonarJacoco}"
+    implementation "com.github.spotbugs:spotbugs-annotations:${versions.spotbugs}"
+    
+    // Logging
+    implementation "org.apache.logging.log4j:log4j-slf4j2-impl:${versions.log4j}"
+    
+    // Lombok
+    compileOnly "org.projectlombok:lombok:${versions.lombok}"
+    annotationProcessor "org.projectlombok:lombok:${versions.lombok}"
+    
+    // JaCoCo
+    jacocoAgent "org.jacoco:org.jacoco.agent:${versions.jacoco}"
+    jacocoAnt "org.jacoco:org.jacoco.ant:${versions.jacoco}"
+    jacocoRuntime "org.jacoco:org.jacoco.agent:${versions.jacoco}:runtime"
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation "org.springframework.restdocs:spring-restdocs-mockmvc:${versions.springRestdocs}"
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacoco {
+    toolVersion = versions.jacoco
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+}
+
+compileJava {
+    options.compilerArgs = ['-parameters']
+    options.encoding = 'UTF-8'
+}
+
+compileTestJava {
+    options.encoding = 'UTF-8'
+}
+
+bootJar {
+    archiveFileName = "${project.name}.jar"
+}
