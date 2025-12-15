@@ -1,0 +1,195 @@
+Perfect — below is a formal, technical document you can submit to the Veracode team to request “Mitigated by Design” for the CWE-327 finding.
+This is written in a security-review / audit style, not conversational, and is appropriate for enterprise reviews.
+
+You can copy this into a Word / PDF / Confluence / Jira attachment as-is.
+
+
+---
+
+CWE-327 Mitigation by Design Justification
+
+Finding: CWE-327 – Use of a Broken or Risky Cryptographic Algorithm
+Tool: Veracode Static Analysis
+Status Requested: Mitigated by Design
+
+
+---
+
+1. Overview
+
+This document provides the technical justification for mitigating the reported CWE-327 finding as Mitigated by Design.
+The application does not use a broken or risky cryptographic algorithm. Instead, it implements AES-GCM, which is a modern, NIST-approved authenticated encryption scheme.
+
+The finding is caused by static analysis limitations and does not represent a real cryptographic vulnerability.
+
+
+---
+
+2. Cryptographic Design Summary
+
+The application uses symmetric encryption to protect sensitive data at rest or in transit. The design follows current industry best practices and standards.
+
+Encryption Algorithm
+
+Algorithm: AES (Advanced Encryption Standard)
+
+Mode: GCM (Galois/Counter Mode)
+
+Padding: NoPadding
+
+Transformation: AES/GCM/NoPadding
+
+
+Security Properties Provided
+
+Confidentiality
+
+Integrity
+
+Authentication (AEAD – Authenticated Encryption with Associated Data)
+
+
+
+---
+
+3. Initialization Vector (IV) Handling
+
+IV Generation
+
+A 96-bit (12-byte) initialization vector is generated per encryption operation
+
+IV generation uses a cryptographically secure random number generator:
+
+SecureRandom.getInstanceStrong().nextBytes(iv);
+
+IVs are never reused with the same key
+
+
+IV Usage
+
+The IV is prepended to the ciphertext for transport and storage
+
+During decryption, the IV is extracted and reused only for that specific ciphertext
+
+The IV is passed to the cipher using GCMParameterSpec
+
+
+This approach fully complies with NIST SP 800-38D recommendations for AES-GCM.
+
+
+---
+
+4. Decryption and Authentication
+
+The decryption process correctly initializes AES-GCM with:
+
+GCMParameterSpec(128, iv) (128-bit authentication tag)
+
+Explicit cipher transformation AES/GCM/NoPadding
+
+
+Authentication is enforced automatically by the GCM mode:
+
+Any modification of ciphertext, IV, or tag results in a decryption failure
+
+Integrity violations cause AEADBadTagException
+
+
+This ensures the ciphertext cannot be altered undetected.
+
+
+---
+
+5. Compliance and Standards Alignment
+
+The implementation aligns with the following standards and guidance:
+
+NIST SP 800-38D – Recommendation for Galois/Counter Mode (GCM)
+
+OWASP Cryptographic Storage Cheat Sheet – Recommends AES-GCM for symmetric encryption
+
+NIST FIPS 197 – AES specification
+
+Industry Best Practices – Authenticated encryption with random IVs
+
+
+AES-GCM is widely used in:
+
+TLS 1.2 / 1.3
+
+Cloud KMS implementations
+
+Secure storage systems
+
+Modern enterprise platforms
+
+
+
+---
+
+6. Reason for Veracode Finding
+
+The CWE-327 finding appears due to static analysis limitations, where Veracode cannot conclusively determine:
+
+That the IV is always generated randomly at runtime
+
+That IVs are never reused
+
+That the IV lifecycle is confined to a single encryption operation
+
+
+As a result, the tool conservatively flags the usage despite the cryptographic design being secure and compliant.
+
+
+---
+
+7. Risk Assessment
+
+Aspect	Assessment
+
+Algorithm Strength	Strong (AES-GCM)
+IV Predictability	Cryptographically secure
+IV Reuse Risk	None
+Integrity Protection	Yes (Authenticated Encryption)
+Exploitability	None
+Business Impact	None
+
+
+There is no practical or theoretical exploit associated with this implementation.
+
+
+---
+
+8. Conclusion
+
+The application does not use a broken or risky cryptographic algorithm.
+AES-GCM is a modern, secure, and standards-compliant encryption scheme when implemented with a random, non-repeating IV and proper authentication handling.
+
+The reported CWE-327 finding does not reflect an actual security weakness and should be classified as Mitigated by Design.
+
+
+---
+
+9. Mitigation Recommendation
+
+Recommendation:
+Mark CWE-327 as Mitigated by Design.
+
+Justification:
+The cryptographic implementation follows NIST and OWASP best practices, uses AES-GCM with a strong random IV, enforces authentication, and does not expose any exploitable weakness.
+
+
+---
+
+If you want, I can also:
+
+Reduce this to a 1-page executive version
+
+Adapt it to Veracode’s mitigation comment character limits
+
+Add code excerpts as an appendix
+
+Tailor language to PCI / ISO / SOC2 reviews
+
+
+Just tell me what format your security team needs.
