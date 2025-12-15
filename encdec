@@ -1,0 +1,46 @@
+private static final int GCM_IV_LENGTH = 12;   // 96 bits
+private static final int GCM_TAG_LENGTH = 128; // bits
+
+public static String encrypt(String plaintext, SecretKey key) throws Exception {
+
+    // ✔ Veracode requires inline SecureRandom IV generation
+    byte[] iv = new byte[GCM_IV_LENGTH];
+    SecureRandom.getInstanceStrong().nextBytes(iv);
+
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+    cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+
+    byte[] cipherText = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+
+    // ✔ prepend IV to ciphertext
+    byte[] output = new byte[iv.length + cipherText.length];
+    System.arraycopy(iv, 0, output, 0, iv.length);
+    System.arraycopy(cipherText, 0, output, iv.length, cipherText.length);
+
+    return Base64.getEncoder().encodeToString(output);
+}
+
+public static String decrypt(String encrypted, SecretKey key) throws Exception {
+
+    byte[] input = Base64.getDecoder().decode(encrypted);
+
+    // ✔ extract IV (first 12 bytes)
+    byte[] iv = Arrays.copyOfRange(input, 0, GCM_IV_LENGTH);
+
+    // ✔ extract ciphertext
+    byte[] cipherText = Arrays.copyOfRange(
+            input,
+            GCM_IV_LENGTH,
+            input.length
+    );
+
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+    cipher.init(Cipher.DECRYPT_MODE, key, spec);
+
+    // ✔ authentication enforced here
+    byte[] plainText = cipher.doFinal(cipherText);
+
+    return new String(plainText, StandardCharsets.UTF_8);
+}
