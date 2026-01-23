@@ -1,0 +1,136 @@
+package com.example.demo.security;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.JwtParserBuilder;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.Date;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class JwtFilterTest {
+
+    JwtFilter filter = new JwtFilter();
+
+    @AfterEach
+    void cleanup() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void noAuthorizationHeader_shouldContinueChain() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        Mockito.verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void expiredToken_shouldReturn401() throws Exception {
+        try (MockedStatic<Jwts> jwts = Mockito.mockStatic(Jwts.class)) {
+
+            Claims claims = Mockito.mock(Claims.class);
+            Mockito.when(claims.get("exp"))
+                    .thenReturn((System.currentTimeMillis() / 1000) - 10);
+            Mockito.when(claims.getSubject()).thenReturn("user");
+
+            JwtParser parser = Mockito.mock(JwtParser.class);
+            Mockito.when(parser.parseClaimsJwt(Mockito.any()).getBody())
+                    .thenReturn(claims);
+
+            JwtParserBuilder builder = Mockito.mock(JwtParserBuilder.class);
+            Mockito.when(builder.build()).thenReturn(parser);
+
+            jwts.when(Jwts::parserBuilder).thenReturn(builder);
+
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("Authorization", "Bearer dummy.token.");
+
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = Mockito.mock(FilterChain.class);
+
+            filter.doFilter(request, response, chain);
+
+            assertEquals(HttpServletResponse.SC_UNAUTHORIZED, response.getStatus());
+        }
+    }
+
+    @Test
+    void validToken_shouldSetAuthentication() throws Exception {
+        try (MockedStatic<Jwts> jwts = Mockito.mockStatic(Jwts.class)) {
+
+            Claims claims = Mockito.mock(Claims.class);
+            Mockito.when(claims.get("exp"))
+                    .thenReturn((System.currentTimeMillis() / 1000) + 1000);
+            Mockito.when(claims.getSubject()).thenReturn("user");
+
+            JwtParser parser = Mockito.mock(JwtParser.class);
+            Mockito.when(parser.parseClaimsJwt(Mockito.any()).getBody())
+                    .thenReturn(claims);
+
+            JwtParserBuilder builder = Mockito.mock(JwtParserBuilder.class);
+            Mockito.when(builder.build()).thenReturn(parser);
+
+            jwts.when(Jwts::parserBuilder).thenReturn(builder);
+
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("Authorization", "Bearer valid.token.");
+
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = Mockito.mock(FilterChain.class);
+
+            filter.doFilter(request, response, chain);
+
+            assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+            Mockito.verify(chain).doFilter(request, response);
+        }
+    }
+
+    @Test
+    void jwtParsingException_shouldReturn401() throws Exception {
+        try (MockedStatic<Jwts> jwts = Mockito.mockStatic(Jwts.class)) {
+
+            JwtParserBuilder builder = Mockito.mock(JwtParserBuilder.class);
+            Mockito.when(builder.build()).thenThrow(new RuntimeException("parse error"));
+
+            jwts.when(Jwts::parserBuilder).thenReturn(builder);
+
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("Authorization", "Bearer bad.token");
+
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = Mockito.mock(FilterChain.class);
+
+            filter.doFilter(request, response, chain);
+
+            assertEquals(HttpServletResponse.SC_UNAUTHORIZED, response.getStatus());
+        }
+    }
+
+    @Test
+    void nonBearerHeader_shouldContinueChain() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Basic abc");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        Mockito.verify(chain).doFilter(request, response);
+    }
+}
