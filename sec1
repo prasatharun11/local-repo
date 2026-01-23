@@ -1,0 +1,131 @@
+package com.example.demo.config;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.Base64;
+import java.util.Date;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class JwtFilterTest {
+
+    private final SecurityConfig.JwtFilter filter =
+            new SecurityConfig.JwtFilter();
+
+    @AfterEach
+    void clearContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shouldAllowRequestWithoutAuthorizationHeader() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        Mockito.verify(chain).doFilter(request, response);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void shouldRejectExpiredToken() throws Exception {
+        String token = createJwtWithExp(secondsAgo(60));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        assertEquals(HttpServletResponse.SC_UNAUTHORIZED, response.getStatus());
+        assertEquals("Token expired", response.getContentAsString());
+    }
+
+    @Test
+    void shouldAcceptValidTokenAndSetAuthentication() throws Exception {
+        String token = createJwtWithExp(secondsFromNow(300));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        Mockito.verify(chain).doFilter(request, response);
+        assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+        assertEquals(
+                "test-user",
+                SecurityContextHolder.getContext().getAuthentication().getName()
+        );
+    }
+
+    @Test
+    void shouldRejectInvalidTokenFormat() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer invalid.token");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        assertEquals(HttpServletResponse.SC_UNAUTHORIZED, response.getStatus());
+        assertEquals("Invalid token", response.getContentAsString());
+    }
+
+    @Test
+    void shouldIgnoreAuthorizationHeaderWithoutBearer() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Basic abc123");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = Mockito.mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        Mockito.verify(chain).doFilter(request, response);
+    }
+
+    /* -------------------------------------------------
+       Helper methods
+       ------------------------------------------------- */
+
+    private String createJwtWithExp(long expSeconds) {
+        String header = base64("{\"alg\":\"none\"}");
+        String payload = base64(
+                "{\"sub\":\"test-user\",\"exp\":" + expSeconds + "}"
+        );
+
+        // Header.Payload. (note the trailing dot)
+        return header + "." + payload + ".";
+    }
+
+    private String base64(String json) {
+        return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(json.getBytes());
+    }
+
+    private long secondsAgo(int seconds) {
+        return (new Date().getTime() / 1000) - seconds;
+    }
+
+    private long secondsFromNow(int seconds) {
+        return (new Date().getTime() / 1000) + seconds;
+    }
+}
