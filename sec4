@@ -1,0 +1,129 @@
+package com.example.security;
+
+import java.util.List;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class WebSecurityConfig {
+
+    // MUST match the `iss` claim exactly
+    private static final String ISSUER =
+            "https://devauth1.custmmomerpltfrm.arun.com/oauth2/heyeyeheujabah";
+
+    // Replace with your real audience
+    private static final String EXPECTED_AUDIENCE = "your-api-audience";
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/public/**",
+                    "/actuator/**",
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html"
+                ).permitAll()
+                .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 ->
+                oauth2.jwt(jwt ->
+                    jwt
+                        .decoder(jwtDecoder())
+                        .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                )
+            );
+
+        return http.build();
+    }
+
+    /**
+     * JWT Decoder with ISS + AUD validation
+     */
+    @Bean
+    JwtDecoder jwtDecoder() {
+
+        NimbusJwtDecoder decoder =
+                NimbusJwtDecoder.withIssuerLocation(ISSUER)
+                        .build();
+
+        OAuth2TokenValidator<Jwt> issuerValidator =
+                JwtValidators.createDefaultWithIssuer(ISSUER);
+
+        OAuth2TokenValidator<Jwt> audienceValidator =
+                new AudienceValidator(EXPECTED_AUDIENCE);
+
+        OAuth2TokenValidator<Jwt> validator =
+                new DelegatingOAuth2TokenValidator<>(
+                        issuerValidator,
+                        audienceValidator
+                );
+
+        decoder.setJwtValidator(validator);
+        return decoder;
+    }
+
+    /**
+     * Maps OAuth2 scopes → Spring Security authorities
+     */
+    @Bean
+    JwtAuthenticationConverter jwtAuthenticationConverter() {
+
+        JwtGrantedAuthoritiesConverter scopes =
+                new JwtGrantedAuthoritiesConverter();
+
+        scopes.setAuthorityPrefix("SCOPE_");
+        scopes.setAuthoritiesClaimName("scope"); // or "scp" if your IdP uses that
+
+        JwtAuthenticationConverter converter =
+                new JwtAuthenticationConverter();
+
+        converter.setJwtGrantedAuthoritiesConverter(scopes);
+        return converter;
+    }
+
+    /**
+     * Audience validator
+     */
+    static class AudienceValidator implements OAuth2TokenValidator<Jwt> {
+
+        private final OAuth2Error error =
+                new OAuth2Error("invalid_token", "Invalid audience", null);
+
+        private final String audience;
+
+        AudienceValidator(String audience) {
+            this.audience = audience;
+        }
+
+        @Override
+        public OAuth2TokenValidatorResult validate(Jwt jwt) {
+
+            List<String> audiences = jwt.getAudience();
+
+            if (audiences != null && audiences.contains(audience)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+
+            return OAuth2TokenValidatorResult.failure(error);
+        }
+    }
+}
