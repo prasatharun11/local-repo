@@ -1,0 +1,221 @@
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.text.ParseException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
+import com.nimbusds.jwt.proc.DefaultJWTClaimsVerifier;
+import com.nimbusds.jwt.proc.DefaultJWTProcessor;
+
+@Component
+public class OktaJwtFilter extends OncePerRequestFilter {
+    
+    private static final Logger LOGGER = LoggerFactory.getLogger(OktaJwtFilter.class);
+    
+    // These will be injected from application properties
+    @Value("${okta.oauth2.issuer:https://uatauth1.customerpltfrm.arun.com/oauth2/}")
+    private String issuerUri;
+    
+    @Value("${okta.oauth2.audience:api://default}")
+    private String expectedAudience;
+    
+    @Value("${okta.oauth2.jwks-uri:#{null}}")
+    private String jwksUri;
+    
+    // Cache for JWK keys (kid -> PublicKey)
+    private final Map<String, PublicKey> keyCache = new ConcurrentHashMap<>();
+    private long lastKeyFetchTime = 0;
+    private static final long KEY_CACHE_DURATION_MS = TimeUnit.HOURS.toMillis(1);
+    
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, 
+                                  HttpServletResponse response, 
+                                  FilterChain filterChain) 
+            throws ServletException, IOException {
+        
+        String path = request.getRequestURI();
+        
+        // Skip filter for public endpoints
+        if (path.startsWith("/public/") || 
+            path.startsWith("/actuator/") || 
+            path.startsWith("/auth/") ||
+            path.equals("/favicon.ico")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        String header = request.getHeader("Authorization");
+        
+        // If no Authorization header, continue without authentication
+        if (header == null || !header.startsWith("Bearer ")) {
+            LOGGER.debug("No Bearer token found in request");
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        String jwtToken = header.substring(7);
+        
+        try {
+            // 1. Parse and validate JWT
+            Map<String, Object> claims = validateAndParseJwt(jwtToken);
+            
+            // 2. Extract user information
+            String username = extractUsername(claims);
+            List<GrantedAuthority> authorities = extractAuthorities(claims);
+            
+            // 3. Create authentication object
+            UsernamePasswordAuthenticationToken auth = 
+                new UsernamePasswordAuthenticationToken(username, null, authorities);
+            
+            // 4. Set authentication in security context
+            SecurityContextHolder.getContext().setAuthentication(auth);
+            
+            LOGGER.debug("Successfully authenticated user: {}", username);
+            
+        } catch (TokenExpiredException e) {
+            LOGGER.warn("Token expired: {}", e.getMessage());
+            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "TOKEN_EXPIRED", "Token has expired");
+            return;
+        } catch (InvalidTokenException e) {
+            LOGGER.warn("Invalid token: {}", e.getMessage());
+            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_TOKEN", "Invalid token");
+            return;
+        } catch (Exception e) {
+            LOGGER.error("Error processing JWT token: {}", e.getMessage(), e);
+            sendError(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "SERVER_ERROR", "Internal server error");
+            return;
+        }
+        
+        // Continue with the filter chain
+        filterChain.doFilter(request, response);
+    }
+    
+    /**
+     * Main method that validates and parses JWT token
+     */
+    private Map<String, Object> validateAndParseJwt(String jwtToken) 
+            throws TokenExpiredException, InvalidTokenException {
+        
+        try {
+            // Parse the JWT without verification first to get headers
+            SignedJWT signedJWT = SignedJWT.parse(jwtToken);
+            
+            // 1. Check token expiration
+            JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
+            Date expiration = claimsSet.getExpirationTime();
+            
+            if (expiration == null || expiration.before(new Date())) {
+                throw new TokenExpiredException("Token expired");
+            }
+            
+            // 2. Get key ID from header
+            String keyId = signedJWT.getHeader().getKeyID();
+            if (keyId == null) {
+                throw new InvalidTokenException("Missing key ID (kid) in token header");
+            }
+            
+            // 3. Get or fetch public key from Okta
+            PublicKey publicKey = getPublicKey(keyId);
+            
+            // 4. Verify JWT signature
+            if (!signedJWT.verify(new com.nimbusds.jose.crypto.RSASSAVerifier((RSAPublicKey) publicKey))) {
+                throw new InvalidTokenException("Invalid token signature");
+            }
+            
+            // 5. Verify issuer and audience
+            verifyIssuerAndAudience(claimsSet);
+            
+            // 6. Parse custom claims
+            return parseClaims(claimsSet);
+            
+        } catch (java.text.ParseException e) {
+            throw new InvalidTokenException("Failed to parse JWT: " + e.getMessage());
+        } catch (com.nimbusds.jose.JOSEException e) {
+            throw new InvalidTokenException("JWT verification failed: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get public key from cache or fetch from Okta JWKS endpoint
+     */
+    private PublicKey getPublicKey(String keyId) throws InvalidTokenException {
+        // Check cache first
+        if (keyCache.containsKey(keyId)) {
+            return keyCache.get(keyId);
+        }
+        
+        // Check if cache needs refresh
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastKeyFetchTime > KEY_CACHE_DURATION_MS) {
+            keyCache.clear(); // Clear cache if expired
+        }
+        
+        try {
+            // Determine JWKS URL
+            String jwksUrl = this.jwksUri;
+            if (jwksUrl == null) {
+                // Auto-construct JWKS URL from issuer
+                jwksUrl = issuerUri;
+                if (!jwksUrl.endsWith("/")) {
+                    jwksUrl += "/";
+                }
+                jwksUrl += "v1/keys";
+            }
+            
+            LOGGER.debug("Fetching JWKS from: {}", jwksUrl);
+            
+            // Fetch JWKS from Okta
+            JWKSet jwkSet = JWKSet.load(new URL(jwksUrl));
+            
+            // Find the specific key
+            JWK jwk = jwkSet.getKeyByKeyId(keyId);
+            if (jwk == null) {
+                throw new InvalidTokenException("Key ID not found in JWKS: " + keyId);
+            }
+            
+            if (!(jwk instanceof RSAKey)) {
+                throw new InvalidTokenException("Key is not an RSA key");
+            }
+            
+            RSAKey rsaKey = (RSAKey) jwk;
+            PublicKey publicKey = rsaKey.toRSAPublicKey();
+            
+            // Cache the key
+            keyCache.put(keyId, publicKey);
+            lastKeyFetchTime = currentTime;
+            
+            LOGGER.debug("Successfully fetched and cached public key for kid: {}", keyId);
+            
+            return publicKey;
+            
