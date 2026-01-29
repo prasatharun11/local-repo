@@ -1,0 +1,19 @@
+function addClassById(html, id, className) {
+  const idRegex = new RegExp(`(<[^>]*id=["']${id}["'][^>]*)(>)`, 'i');
+
+  return html.replace(idRegex, (match, start, end) => {
+    // if class attribute exists
+    if (/class=["']/.test(start)) {
+      return (
+        start.replace(/class=["']([^"']*)["']/, (m, classes) => {
+          const classList = classes.split(/\s+/);
+          if (classList.includes(className)) return m; // already exists
+          return `class="${classes} ${className}"`;
+        }) + end
+      );
+    }
+
+    // if no class attribute
+    return `${start} class="${className}"${end}`;
+  });
+}
