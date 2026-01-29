@@ -1,0 +1,12 @@
+html = html.replace(
+  /(<[^>]*id=["']abc["'][^>]*)(>)/,
+  (match, start, end) => {
+    if (/class=/.test(start)) {
+      return start.replace(
+        /class=["']([^"']*)["']/,
+        (m, classes) => `class="${classes} new-class"`
+      ) + end;
+    }
+    return `${start} class="new-class"${end}`;
+  }
+);
