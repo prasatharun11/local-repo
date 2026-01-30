@@ -1,0 +1,110 @@
+Great point — this strengthens the “unnecessary coupling & dependency bloat” argument, which management usually understands quickly.
+Below is the new section, followed by a fully merged, final version of the document with this point cleanly integrated so you can use it directly.
+🔹 New Point to Add
+Unnecessary and Unused Dependencies Introduced by Arun Framework
+Arun Framework defines and includes a set of JAR dependencies intended to support multiple use cases.
+However, not all applications require all framework-provided dependencies.
+As a result:
+Applications inherit JARs that are not actually used
+These JARs still appear in:
+Dependency trees
+Veracode and security scans
+Runtime classpaths
+Impact:
+Increased attack surface due to unused libraries
+Additional security findings for code paths not used by the application
+Larger dependency trees, making troubleshooting and upgrades more complex
+Additionally:
+Applications already manage multiple third-party JARs outside Arun Framework
+Managing Spring and Gradle dependencies directly would simply extend an existing, proven responsibility rather than introduce a new one
+✅ Final Combined Document (Management-Ready)
+Proposal to Move Away from Arun Framework and Arun Gradle
+1. Executive Summary
+This document proposes transitioning applications away from the internally developed Arun Framework and Arun Gradle, and instead adopting application-owned, industry-standard Spring Boot and Gradle configurations.
+While Arun Framework and Arun Gradle were initially introduced to standardize dependency management, they now create security, compliance, and delivery bottlenecks that outweigh their benefits.
+2. Current State Overview
+Arun Framework
+Internal Spring-based framework
+Centrally controls Spring Boot and related dependency versions
+Arun Gradle
+Organization-wide Gradle setup
+Based on older Gradle versions
+Blocks Spring Boot and tooling upgrades
+3. Key Challenges and Risks
+3.1 Slow Security Vulnerability Remediation
+Veracode-reported vulnerabilities require framework upgrades
+Delays increase exposure and compliance risk
+Manual overrides introduce inconsistency
+3.2 Limited Spring and Library Upgrade Flexibility
+Spring components must be upgraded as a group
+Application teams cannot upgrade independently
+Leads to technical debt
+3.3 End-to-End Validation Responsibility Remains with Applications
+Application teams must fully validate every framework update
+Centralized control does not reduce workload or risk
+3.4 Lack of Real-World Validation by Framework Team
+Framework team does not own applications using the framework
+Higher regression risk
+3.5 Release and Deployment Bottlenecks
+Framework changes are bundled
+Application production releases depend on framework approvals
+Causes unpredictable delivery delays
+3.6 Dependency on Arun Gradle for Modernization
+Old Gradle version blocks Spring Boot upgrades
+Multi-layer dependency slows progress
+3.7 Veracode and Compliance Overhead
+Framework vulnerabilities appear in application scans
+Applications must submit RA or false-positive justifications
+Increased audit burden
+3.8 Unnecessary and Unused Dependencies Introduced by Arun Framework
+Applications inherit JARs from Arun Framework that may not be required
+Unused dependencies:
+Increase attack surface
+Trigger unnecessary Veracode findings
+Increase maintenance complexity
+Applications already manage many non-framework JARs
+Managing Spring dependencies directly aligns with existing responsibility
+4. Business Impact Summary
+Area
+Impact
+Security
+Longer vulnerability exposure
+Compliance
+Repeated RA justifications
+Delivery
+Delayed and unpredictable releases
+Agility
+Blocked upgrades
+Cost
+Increased maintenance overhead
+Ownership
+Control vs accountability mismatch
+5. Proposed Future State
+Application-owned:
+Spring Boot and Spring dependencies
+Gradle versions and plugins
+Use official Spring BOMs and supported Gradle releases
+Independent release and upgrade cycles
+6. Advantages of Application-Owned Spring and Gradle
+Faster security fixes
+Predictable releases
+Reduced compliance overhead
+Smaller, targeted testing scope
+Industry-standard tooling
+Clear ownership and accountability
+Reduced long-term technical debt
+7. Risk Mitigation Strategy
+Phased migration
+Clear governance and standards
+Architecture and security oversight
+Shared documentation and best practices
+8. Conclusion and Recommendation
+Arun Framework and Arun Gradle now introduce significant security, compliance, and delivery risks while providing limited benefit. Application teams already manage dependencies and validation, making centralized control ineffective.
+Recommendation:
+Approve a phased move away from Arun Framework and Arun Gradle, enabling application teams to manage Spring and Gradle directly using industry-standard approaches.
+If you want, I can:
+Compress this into a 1-page executive summary
+Turn it into slides
+Add a migration roadmap
+Adjust wording for CISO / Architecture Board / VP-level review
+You now have a very strong, approval-ready document 💪
