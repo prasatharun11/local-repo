@@ -1,0 +1,129 @@
+import org.apache.cxf.interceptor.Fault;
+import org.apache.cxf.message.Message;
+import org.apache.cxf.phase.AbstractPhaseInterceptor;
+import org.apache.cxf.phase.Phase;
+import org.apache.cxf.transport.http.HTTPConduit;
+import org.apache.cxf.transports.http.configuration.HTTPClientPolicy;
+import java.io.IOException;
+import java.util.logging.Logger;
+
+public class RetryInterceptor extends AbstractPhaseInterceptor<Message> {
+    
+    private static final Logger LOG = Logger.getLogger(RetryInterceptor.class.getName());
+    private int maxRetries = 3;
+    private long retryDelay = 1000; // milliseconds
+    
+    public RetryInterceptor() {
+        // Set to PREPARE_SEND to intercept before sending
+        super(Phase.PREPARE_SEND);
+    }
+    
+    public RetryInterceptor(int maxRetries, long retryDelay) {
+        super(Phase.PREPARE_SEND);
+        this.maxRetries = maxRetries;
+        this.retryDelay = retryDelay;
+    }
+    
+    @Override
+    public void handleMessage(Message message) throws Fault {
+        // Get retry count from message context (if exists)
+        Integer retryCount = (Integer) message.getContextualProperty("retry.count");
+        if (retryCount == null) {
+            retryCount = 0;
+            message.put("retry.count", retryCount);
+        }
+        
+        // Configure fresh connection for each retry attempt
+        configureFreshConnection(message);
+    }
+    
+    private void configureFreshConnection(Message message) {
+        try {
+            HTTPConduit conduit = message.get(HTTPConduit.class);
+            if (conduit != null) {
+                HTTPClientPolicy policy = conduit.getClient();
+                if (policy == null) {
+                    policy = new HTTPClientPolicy();
+                }
+                
+                // Force fresh connection for each retry
+                policy.setConnection(HTTPClientPolicy.ConnectionType.CLOSE);
+                policy.setAllowChunking(false);
+                policy.setAutoRedirect(false);
+                policy.setConnectionTimeout(5000);
+                policy.setReceiveTimeout(10000);
+                
+                conduit.setClient(policy);
+            }
+        } catch (Exception e) {
+            LOG.warning("Failed to configure fresh connection: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public void handleFault(Message message) {
+        // This is called when an exception occurs
+        handleRetry(message);
+    }
+    
+    private void handleRetry(Message message) {
+        Integer retryCount = (Integer) message.getContextualProperty("retry.count");
+        if (retryCount == null) {
+            retryCount = 0;
+        }
+        
+        Throwable exception = message.getContent(Exception.class);
+        
+        // Check if we should retry
+        if (shouldRetry(exception) && retryCount < maxRetries) {
+            retryCount++;
+            message.put("retry.count", retryCount);
+            
+            LOG.info("Retry attempt " + retryCount + " of " + maxRetries + 
+                    " after exception: " + exception.getMessage());
+            
+            // Delay before retry
+            try {
+                Thread.sleep(retryDelay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
+            // Reset the fault
+            message.removeContent(Exception.class);
+            
+            // Resend the message by throwing a special exception
+            // that CXF will catch and retry
+            throw new RetryableFault("Retry attempt " + retryCount, exception);
+        }
+    }
+    
+    private boolean shouldRetry(Throwable exception) {
+        if (exception == null) return false;
+        
+        // Retry on network/timeout errors
+        String message = exception.getMessage().toLowerCase();
+        
+        return exception instanceof IOException ||
+               exception.getCause() instanceof IOException ||
+               message.contains("timeout") ||
+               message.contains("connection") ||
+               message.contains("reset") ||
+               message.contains("refused");
+    }
+    
+    // Custom exception for retry
+    public static class RetryableFault extends Fault {
+        public RetryableFault(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+    
+    public void setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
+    }
+    
+    public void setRetryDelay(long retryDelay) {
+        this.retryDelay = retryDelay;
+    }
+}
