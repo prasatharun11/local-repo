@@ -1,0 +1,32 @@
+public RetrieveURLResponse parseResponse(String xmlContent) throws Exception {
+    // Option 1: Parse entire SOAP envelope
+    JAXBContext context = JAXBContext.newInstance(SoapEnvelope.class);
+    Unmarshaller unmarshaller = context.createUnmarshaller();
+    
+    StringReader reader = new StringReader(xmlContent);
+    SoapEnvelope envelope = (SoapEnvelope) unmarshaller.unmarshal(reader);
+    
+    return (RetrieveURLResponse) envelope.getBody();
+    
+    // Option 2: Parse just the response part
+    // Extract the response XML from the SOAP envelope
+    String responseXml = extractResponseXml(xmlContent);
+    
+    JAXBContext responseContext = JAXBContext.newInstance(RetrieveURLResponse.class);
+    Unmarshaller responseUnmarshaller = responseContext.createUnmarshaller();
+    
+    return (RetrieveURLResponse) responseUnmarshaller.unmarshal(
+        new StringReader(responseXml)
+    );
+}
+
+private String extractResponseXml(String soapXml) {
+    // Simple extraction - you might need a more robust method
+    int start = soapXml.indexOf("<retrieveDocumentURLResponse");
+    int end = soapXml.indexOf("</retrieveDocumentURLResponse>");
+    
+    if (start != -1 && end != -1) {
+        return soapXml.substring(start, end + "</retrieveDocumentURLResponse>".length());
+    }
+    return soapXml;
+}
