@@ -1,0 +1,36 @@
+private void disableHostnameVerification(Object proxy) {
+    HttpURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+    HTTPConduit httpConduit = (HTTPConduit) ClientProxy.getClient(proxy).getConduit();
+    
+    // TLS configuration
+    TLSClientParameters tlsCP = new TLSClientParameters();
+    tlsCP.setDisableCNCheck(true);
+    tlsCP.setHostnameVerifier((hostname, session) -> true);
+    httpConduit.setTlsClientParameters(tlsCP);
+
+    // HTTP policy configuration for CXF 4.1.3
+    HTTPClientPolicy policy = new HTTPClientPolicy();
+    policy.setConnectionTimeout(240000);
+    policy.setReceiveTimeout(240000);
+    
+    // THESE ARE THE CORRECT METHODS FOR CXF 4.1.3:
+    policy.setAllowChunking(false);  // This helps prevent connection reuse
+    
+    // Set connection TTL to 0 or very low
+    try {
+        // In CXF 4.1.3, you might need to use:
+        policy.getClass().getMethod("setConnectionTimeToLive", long.class).invoke(policy, 0L);
+    } catch (Exception e) {
+        // Alternative: use setCacheControl with no-cache
+        policy.setCacheControl("no-cache");
+    }
+    
+    httpConduit.setClient(policy);
+    
+    // MANUALLY SET CONNECTION HEADERS - This is key!
+    Map<String, List<String>> headers = new HashMap<>();
+    headers.put("Connection", Collections.singletonList("close"));
+    headers.put("Pragma", Collections.singletonList("no-cache"));
+    headers.put("Cache-Control", Collections.singletonList("no-cache, no-store"));
+    httpConduit.setHeaders(headers);
+}
