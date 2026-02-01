@@ -1,0 +1,48 @@
+private void configureFreshConnections(Object proxy) {
+    Client client = ClientProxy.getClient(proxy);
+    HTTPConduit conduit = (HTTPConduit) client.getConduit();
+    
+    // 1. Create HTTP policy
+    HTTPClientPolicy policy = new HTTPClientPolicy();
+    policy.setConnectionTimeout(240000);
+    policy.setReceiveTimeout(240000);
+    policy.setAllowChunking(false);  // Important!
+    
+    // For CXF 4.1.3, try to disable keep-alive via reflection
+    try {
+        Method setKeepAlive = policy.getClass().getMethod("setConnectionKeepAlive", boolean.class);
+        setKeepAlive.invoke(policy, false);
+    } catch (NoSuchMethodException e) {
+        // Method doesn't exist in this version
+        System.out.println("setConnectionKeepAlive not available in CXF 4.1.3");
+    }
+    
+    conduit.setClient(policy);
+    
+    // 2. Add interceptor to force connection close
+    client.getOutInterceptors().add(new AbstractPhaseInterceptor<Message>(Phase.PREPARE_SEND) {
+        public MyInterceptor() {
+            super(Phase.PREPARE_SEND);
+        }
+        
+        @Override
+        public void handleMessage(Message message) throws Fault {
+            // Force Connection: close header
+            Map<String, List<String>> headers = 
+                (Map<String, List<String>>) message.get(Message.PROTOCOL_HEADERS);
+            
+            if (headers == null) {
+                headers = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            }
+            
+            // These headers force connection closure
+            headers.put("Connection", Collections.singletonList("close"));
+            headers.put("Proxy-Connection", Collections.singletonList("close"));
+            
+            message.put(Message.PROTOCOL_HEADERS, headers);
+            
+            // Also set a property that CXF might check
+            message.put("org.apache.cxf.transport.http.connection", "close");
+        }
+    });
+}
