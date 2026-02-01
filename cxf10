@@ -1,0 +1,32 @@
+public RetrieveURLResponse parseWithDOMParser(String xmlContent) throws Exception {
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    factory.setNamespaceAware(true);
+    DocumentBuilder builder = factory.newDocumentBuilder();
+    
+    Document doc = builder.parse(new InputSource(new StringReader(xmlContent)));
+    
+    RetrieveURLResponse response = new RetrieveURLResponse();
+    
+    // Method A: Using getElementsByTagName
+    NodeList mDocIDList = doc.getElementsByTagName("mDocID");
+    if (mDocIDList.getLength() > 0) {
+        response.setMDocID(mDocIDList.item(0).getTextContent());
+    }
+    
+    NodeList urlList = doc.getElementsByTagName("url");
+    if (urlList.getLength() > 0) {
+        String url = urlList.item(0).getTextContent();
+        // Clean CDATA if present
+        url = cleanCData(url);
+        response.setUrl(url);
+    }
+    
+    return response;
+}
+
+private String cleanCData(String text) {
+    if (text.contains("<![CDATA[")) {
+        return text.replace("<![CDATA[", "").replace("]]>", "").trim();
+    }
+    return text;
+}
