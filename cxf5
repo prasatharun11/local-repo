@@ -1,0 +1,37 @@
+import org.apache.cxf.Bus;
+import org.apache.cxf.BusFactory;
+import org.apache.cxf.transport.http.HTTPConduit;
+import org.apache.cxf.transport.http.HTTPClientPolicy;
+
+public class GlobalConnectionConfigurator {
+    
+    public static void configureGlobalFreshConnections() {
+        Bus bus = BusFactory.getDefaultBus();
+        
+        // Add global out interceptor to all clients
+        bus.getOutInterceptors().add(new AbstractPhaseInterceptor<Message>(Phase.PREPARE_SEND) {
+            @Override
+            public void handleMessage(Message message) throws Fault {
+                // Force Connection: close on ALL outgoing messages
+                Map<String, List<String>> headers = 
+                    (Map<String, List<String>>) message.get(Message.PROTOCOL_HEADERS);
+                
+                if (headers == null) {
+                    headers = new HashMap<>();
+                }
+                
+                headers.put("Connection", Arrays.asList("close"));
+                headers.put("Proxy-Connection", Arrays.asList("close"));
+                message.put(Message.PROTOCOL_HEADERS, headers);
+                
+                // Disable chunking globally
+                message.put(Message.CHUNKING_SUPPORTED, Boolean.FALSE);
+            }
+        });
+        
+        // Configure global HTTP conduit settings
+        bus.setProperty("org.apache.cxf.transport.http.forceConnectionClose", Boolean.TRUE);
+        bus.setProperty("org.apache.cxf.transport.http.chunking", Boolean.FALSE);
+        bus.setProperty("disable.outputstream.optimization", Boolean.TRUE);
+    }
+}
