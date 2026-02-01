@@ -1,0 +1,14 @@
+// Add at application startup
+static {
+    // These affect the underlying HTTP layer
+    System.setProperty("http.keepAlive", "false");
+    System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+    System.setProperty("http.maxConnections", "1");  // Limit connection pool
+    
+    // CXF-specific properties
+    System.setProperty("org.apache.cxf.transport.http.async.usePolicy", "false");
+    System.setProperty("org.apache.cxf.transport.http.auth.disable", "true");
+    
+    // Disable HTTP/1.1 persistent connections
+    System.setProperty("http.protocol.version", "HTTP/1.0");
+}
