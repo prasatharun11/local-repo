@@ -1,0 +1,68 @@
+import org.apache.cxf.Bus;
+import org.apache.cxf.BusFactory;
+import org.apache.cxf.endpoint.Client;
+import org.apache.cxf.frontend.ClientProxy;
+import org.apache.cxf.transport.http.HTTPConduit;
+import org.apache.cxf.configuration.jsse.TLSClientParameters;
+import org.apache.cxf.transports.http.configuration.HTTPClientPolicy;
+
+public class AbsoluteFreshConnectionExecutor {
+
+    public <T> T execute(ServiceFactory factory,
+                         ServiceCall<T> call) throws Exception {
+
+        Bus bus = null;
+        Object proxy = null;
+        Client client = null;
+
+        try {
+
+            // STEP 1 — NEW CXF BUS (kills shared pooling)
+            bus = BusFactory.newInstance().createBus();
+            BusFactory.setThreadDefaultBus(bus);
+
+            // STEP 2 — NEW proxy instance
+            proxy = factory.createProxy();
+
+            // STEP 3 — Configure HTTP
+            client = ClientProxy.getClient(proxy);
+            HTTPConduit conduit = (HTTPConduit) client.getConduit();
+
+            TLSClientParameters tls = new TLSClientParameters();
+            tls.setDisableCNCheck(true);
+            tls.setHostnameVerifier((h, s) -> true);
+            conduit.setTlsClientParameters(tls);
+
+            HTTPClientPolicy policy = new HTTPClientPolicy();
+            policy.setAllowChunking(false);
+            policy.setConnectionTimeout(240000);
+            policy.setReceiveTimeout(240000);
+
+            conduit.setClient(policy);
+
+            // STEP 4 — Execute call
+            return call.execute(proxy);
+
+        }
+        finally {
+
+            try {
+                if (client != null) client.destroy();
+            } catch (Exception ignore) {}
+
+            try {
+                if (bus != null) bus.shutdown(true);
+            } catch (Exception ignore) {}
+        }
+    }
+
+    @FunctionalInterface
+    public interface ServiceFactory {
+        Object createProxy();
+    }
+
+    @FunctionalInterface
+    public interface ServiceCall<T> {
+        T execute(Object proxy) throws Exception;
+    }
+}
