@@ -1,0 +1,32 @@
+public void validateS3Url(String urlString) throws Exception {
+
+    URI uri = new URI(urlString);
+
+    // 1️⃣ Enforce HTTPS
+    if (!"https".equalsIgnoreCase(uri.getScheme())) {
+        throw new SecurityException("Only HTTPS allowed");
+    }
+
+    String host = uri.getHost().toLowerCase();
+
+    // 2️⃣ Validate S3 domain pattern
+    Matcher matcher = S3_HOST_PATTERN.matcher(host);
+    if (!matcher.matches()) {
+        throw new SecurityException("Not an S3 domain");
+    }
+
+    // 3️⃣ Extract bucket from host
+    String bucket = matcher.group(1);
+
+    if (!ALLOWED_BUCKETS.contains(bucket)) {
+        throw new SecurityException("Bucket not allowlisted");
+    }
+
+    // 4️⃣ Block internal IP resolution
+    InetAddress addr = InetAddress.getByName(host);
+    if (addr.isAnyLocalAddress()
+            || addr.isLoopbackAddress()
+            || addr.isSiteLocalAddress()) {
+        throw new SecurityException("Internal address blocked");
+    }
+}
