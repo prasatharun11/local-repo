@@ -1,0 +1,73 @@
+// Secure data preparation method - replace with your actual data source
+private byte[] prepareRequestData() {
+    // 1. Get the actual data you need to send (e.g., from secure storage, encrypted source)
+    // 2. This should NOT include hardcoded sensitive information
+    byte[] requestData = soapEnvelope.lope.getBytes(StandardCharsets.UTF_8);
+    
+    // If you need to prepend protocol headers, ensure they don't contain sensitive info
+    byte[] protocolHeader = getProtocolHeader(); // Non-sensitive protocol bytes
+    byte[] combinedData = new byte[protocolHeader.length + requestData.length];
+    
+    System.arraycopy(protocolHeader, 0, combinedData, 0, protocolHeader.length);
+    System.arraycopy(requestData, 0, combinedData, protocolHeader.length, requestData.length);
+    
+    return combinedData;
+}
+
+// Secure protocol header - if these bytes are required for protocol communication
+private byte[] getProtocolHeader() {
+    // Document why these specific bytes are needed
+    // Example: "SOAP/XML protocol initialization bytes"
+    return new byte[] { 0x00, 0x01, 0x02, 0x03 };
+}
+
+// Main method with secure exception handling
+private void sendSecureRequest() throws IOException {
+    byte[] sensitiveData = null;
+    
+    try {
+        // Prepare data securely
+        sensitiveData = prepareRequestData();
+        
+        // Write to output stream
+        try (OutputStream os = connect.toOutputStream()) {
+            os.write(sensitiveData);
+            os.flush();
+        }
+        
+    } catch (IOException e) {
+        // CWE-209: Log generic error without sensitive details
+        logger.error("Failed to transmit request over network");
+        // Re-throw for higher-level handling
+        throw new IOException("Network transmission failure", e);
+        
+    } catch (SecurityException e) {
+        // Specific handling for security-related exceptions
+        logger.error("Security violation during request transmission");
+        throw new SecurityException("Request transmission blocked", e);
+        
+    } catch (Exception e) {
+        // CWE-209: Generic catch-all with no sensitive information
+        logger.error("Unexpected error during request processing");
+        throw new IOException("Request processing failed", e);
+        
+    } finally {
+        // CWE-201: Always clear sensitive data from memory
+        if (sensitiveData != null) {
+            Arrays.fill(sensitiveData, (byte) 0);
+            sensitiveData = null;
+        }
+    }
+}
+
+// Usage example
+public void executeRequest() {
+    try {
+        sendSecureRequest();
+        logger.info("Request transmitted successfully");
+    } catch (IOException e) {
+        // Handle at application level with appropriate user feedback
+        logger.error("Could not complete request transmission");
+        // Optionally notify user with generic message
+    }
+}
