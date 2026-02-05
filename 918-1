@@ -1,0 +1,7 @@
+private static final Set<String> ALLOWED_BUCKETS = Set.of(
+        "my-prod-bucket",
+        "my-logs-bucket"
+);
+
+private static final Pattern S3_HOST_PATTERN =
+        Pattern.compile("^([a-z0-9.-]+)\\.s3(\\.[a-z0-9-]+)?\\.amazonaws\\.com$");
