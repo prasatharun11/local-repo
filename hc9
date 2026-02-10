@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Service Health Dashboard</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        margin: 0;
+        padding: 20px;
+    }
+
+    h2 {
+        margin-top: 0;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    button {
+        background: #0052cc;
+        color: white;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-bottom: 15px;
+    }
+
+    button:hover {
+        background: #0747a6;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th, td {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        text-align: left;
+    }
+
+    th {
+        background: #fafafa;
+    }
+
+    .status {
+        font-weight: bold;
+        padding: 5px 10px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+
+    .UP {
+        background: #e3fcef;
+        color: #006644;
+    }
+
+    .DOWN {
+        background: #ffebe6;
+        color: #bf2600;
+    }
+
+    .ERROR {
+        background: #fff4e5;
+        color: #974f0c;
+    }
+
+    .loading {
+        color: #555;
+        font-style: italic;
+    }
+
+    .footer {
+        margin-top: 15px;
+        font-size: 12px;
+        color: #777;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>Service Health Dashboard</h2>
+
+<button onclick="runHealthChecks()">Run Health Checks</button>
+
+<table id="healthTable">
+<thead>
+<tr>
+<th>Service</th>
+<th>URL</th>
+<th>Status</th>
+<th>Last Checked</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+<div class="footer">
+Actuator endpoint expected: <b>/actuator/health</b>
+</div>
+
+</div>
+
+<script>
+// =======================
+// 👉 CONFIGURE SERVICES HERE
+// =======================
+const services = [
+    { name: "User Service", url: "https://example.com/user-service" },
+    { name: "Order Service", url: "https://example.com/order-service" },
+    { name: "Payment Service", url: "https://example.com/payment-service" }
+
+    // Add remaining services here (up to 15 or more)
+];
+
+const TIMEOUT_MS = 8000;
+
+// =======================
+// TABLE INIT
+// =======================
+const tbody = document.querySelector("#healthTable tbody");
+
+function initTable() {
+    tbody.innerHTML = "";
+
+    services.forEach((svc, index) => {
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+            <td>${svc.name}</td>
+            <td>${svc.url}</td>
+            <td class="loading" id="status-${index}">Not Checked</td>
+            <td id="time-${index}">-</td>
+        `;
+
+        tbody.appendChild(row);
+    });
+}
+
+initTable();
+
+// =======================
+// HEALTH CHECK LOGIC
+// =======================
+async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = TIMEOUT_MS } = options;
+
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(resource, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
+}
+
+function updateStatus(index, statusText, cssClass) {
+    const el = document.getElementById(`status-${index}`);
+    el.className = `status ${cssClass}`;
+    el.textContent = statusText;
+
+    document.getElementById(`time-${index}`).textContent =
+        new Date().toLocaleTimeString();
+}
+
+async function checkService(service, index) {
+    try {
+        updateStatus(index, "Checking...", "loading");
+
+        const res = await fetchWithTimeout(
+            service.url.replace(/\/$/, "") + "/actuator/health"
+        );
+
+        if (!res.ok) {
+            updateStatus(index, "DOWN", "DOWN");
+            return;
+        }
+
+        const data = await res.json();
+
+        if (data.status && data.status.toUpperCase() === "UP") {
+            updateStatus(index, "UP", "UP");
+        } else {
+            updateStatus(index, "DOWN", "DOWN");
+        }
+
+    } catch (err) {
+        updateStatus(index, "ERROR", "ERROR");
+    }
+}
+
+async function runHealthChecks() {
+    for (let i = 0; i < services.length; i++) {
+        checkService(services[i], i);
+    }
+}
+</script>
+
+</body>
+</html>
