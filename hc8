@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Server Health Monitor</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f4f5f7;">
+
+<div id="app" style="max-width: 1400px; margin: 0 auto;">
+  
+  <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
+    <h1 style="color: #172B4D; margin: 0 0 10px 0; font-size: 28px;">🏥 Server Health Monitor</h1>
+    <p style="color: #6B778C; margin: 0; font-size: 14px;">Real-time monitoring of Spring Boot Actuator endpoints</p>
+  </div>
+
+  <div id="config-section" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <h3 style="margin: 0 0 15px 0; color: #172B4D;">⚙️ Server Configuration</h3>
+    <textarea id="serverConfig" style="width: 100%; min-height: 200px; padding: 12px; border: 2px solid #DFE1E6; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 13px; box-sizing: border-box;" placeholder="Enter servers (one per line):
+Production Server 1 | http://server1.com:8080/actuator/health
+Production Server 2 | http://server2.com:8081/actuator/health">Production Server 1 | http://localhost:8080/actuator/health
+Dev Server | http://localhost:8081/actuator/health
+Staging Server | http://localhost:8082/actuator/health</textarea>
+    <div style="margin-top: 10px; font-size: 12px; color: #6B778C;">
+      💡 Format: <strong>Server Name | URL</strong> (one per line)
+    </div>
+  </div>
+
+  <div id="message" style="display: none; padding: 12px; border-radius: 5px; margin-bottom: 15px; font-size: 14px;"></div>
+
+  <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+    <button id="checkBtn" onclick="checkAllServers()" style="padding: 10px 20px; font-size: 14px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; background: #0052CC; color: white;">
+      🔄 Check All Servers
+    </button>
+    <button onclick="clearResults()" style="padding: 10px 20px; font-size: 14px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; background: #6c757d; color: white;">
+      🗑️ Clear
+    </button>
+    <div style="margin-left: auto; display: flex; gap: 15px;">
+      <div style="display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 15px; font-size: 13px; font-weight: 600; background: #DEEBFF; color: #0747A6;">
+        <span>📊 Total:</span>
+        <strong id="total">0</strong>
+      </div>
+      <div style="display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 15px; font-size: 13px; font-weight: 600; background: #E3FCEF; color: #006644;">
+        <span>✓ Up:</span>
+        <strong id="up">0</strong>
+      </div>
+      <div style="display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 15px; font-size: 13px; font-weight: 600; background: #FFEBE6; color: #DE350B;">
+        <span>✗ Down:</span>
+        <strong id="down">0</strong>
+      </div>
+    </div>
+  </div>
+
+  <div id="grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;"></div>
+
+  <div id="lastCheck" style="text-align: center; color: #6B778C; margin-top: 20px; font-size: 12px;"></div>
+
+</div>
+
+<script>
+var servers = [];
+var checkTimeout = 10000;
+
+function showMessage(msg, type) {
+  var el = document.getElementById('message');
+  el.style.display = 'block';
+  el.textContent = msg;
+  if (type === 'error') {
+    el.style.background = '#FFEBE6';
+    el.style.color = '#DE350B';
+    el.style.border = '1px solid #FF8F73';
+  } else {
+    el.style.background = '#E3FCEF';
+    el.style.color = '#006644';
+    el.style.border = '1px solid #79F2C0';
+    setTimeout(function() { el.style.display = 'none'; }, 5000);
+  }
+}
+
+function parseConfig() {
+  var config = document.getElementById('serverConfig').value;
+  var lines = config.split('\n').filter(function(line) { return line.trim(); });
+  
+  servers = [];
+  for (var i = 0; i < lines.length; i++) {
+    var parts = lines[i].split('|');
+    if (parts.length === 2) {
+      servers.push({
+        name: parts[0].trim(),
+        url: parts[1].trim()
+      });
+    } else if (parts.length === 1 && parts[0].trim()) {
+      servers.push({
+        name: 'Server ' + (i + 1),
+        url: parts[0].trim()
+      });
+    }
+  }
+  return servers;
+}
+
+function createCard(server) {
+  var status = server.status || 'pending';
+  var borderColor = status === 'up' ? '#36B37E' : (status === 'down' ? '#FF5630' : '#DFE1E6');
+  var badgeBg = status === 'up' ? '#E3FCEF' : (status === 'down' ? '#FFEBE6' : '#F4F5F7');
+  var badgeColor = status === 'up' ? '#006644' : (status === 'down' ? '#DE350B' : '#6B778C');
+  var badgeText = status === 'up' ? '✓ UP' : (status === 'down' ? '✗ DOWN' : 'PENDING');
+  
+  var details = '';
+  if (status === 'up' && server.data) {
+    details = '<div style="padding: 6px 0; font-size: 13px; display: flex; justify-content: space-between; border-bottom: 1px solid #F4F5F7;">' +
+              '<span style="font-weight: 600; color: #42526E;">Status:</span>' +
+              '<span style="color: #006644; font-weight: 600;">' + (server.data.status || 'UP') + '</span></div>';
+    details += '<div style="padding: 6px 0; font-size: 13px; display: flex; justify-content: space-between;">' +
+               '<span style="font-weight: 600; color: #42526E;">Response:</span>' +
+               '<span style="color: #6B778C;">' + (server.responseTime || 'N/A') + '</span></div>';
+  } else if (status === 'down') {
+    details = '<div style="padding: 6px 0; font-size: 13px; display: flex; justify-content: space-between; border-bottom: 1px solid #F4F5F7;">' +
+              '<span style="font-weight: 600; color: #42526E;">Status:</span>' +
+              '<span style="color: #DE350B; font-weight: 600;">DOWN</span></div>';
+    if (server.error) {
+      details += '<div style="color: #DE350B; font-size: 12px; margin-top: 8px; padding: 8px; background: #FFEBE6; border-radius: 3px;">' + server.error + '</div>';
+    }
+  } else {
+    details = '<div style="padding: 6px 0; font-size: 13px; color: #6B778C;">Not checked yet</div>';
+  }
+  
+  return '<div style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid ' + borderColor + ';">' +
+         '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">' +
+         '<div style="font-size: 16px; font-weight: 700; color: #172B4D; word-break: break-word; flex: 1;">' + server.name + '</div>' +
+         '<span style="padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; margin-left: 10px; background: ' + badgeBg + '; color: ' + badgeColor + ';">' + badgeText + '</span>' +
+         '</div>' +
+         '<div style="color: #6B778C; font-size: 12px; margin-bottom: 12px; word-break: break-all;">' + server.url + '</div>' +
+         '<div>' + details + '</div>' +
+         '</div>';
+}
+
+function updateGrid(servers) {
+  var grid = document.getElementById('grid');
+  grid.innerHTML = servers.map(function(s) { return createCard(s); }).join('');
+}
+
+function updateSummary(servers) {
+  var upCount = 0;
+  var downCount = 0;
+  
+  for (var i = 0; i < servers.length; i++) {
+    if (servers[i].status === 'up') upCount++;
+    else if (servers[i].status === 'down') downCount++;
+  }
+  
+  document.getElementById('total').textContent = servers.length;
+  document.getElementById('up').textContent = upCount;
+  document.getElementById('down').textContent = downCount;
+}
+
+function checkServer(server) {
+  return new Promise(function(resolve) {
+    var startTime = Date.now();
+    var timeoutId;
+    var completed = false;
+    
+    function finish(result) {
+      if (!completed) {
+        completed = true;
+        clearTimeout(timeoutId);
+        resolve(result);
+      }
+    }
+    
+    timeoutId = setTimeout(function() {
+      finish({
+        name: server.name,
+        url: server.url,
+        status: 'down',
+        error: 'Request timeout (>10s)'
+      });
+    }, checkTimeout);
+    
+    fetch(server.url, {
+      method: 'GET',
+      mode: 'cors',
+      headers: { 'Accept': 'application/json' }
+    })
+    .then(function(response) {
+      var responseTime = Date.now() - startTime;
+      if (response.ok) {
+        return response.json().then(function(data) {
+          finish({
+            name: server.name,
+            url: server.url,
+            status: 'up',
+            responseTime: responseTime + 'ms',
+            data: data
+          });
+        }).catch(function() {
+          finish({
+            name: server.name,
+            url: server.url,
+            status: 'up',
+            responseTime: responseTime + 'ms',
+            data: { status: 'UP' }
+          });
+        });
+      } else {
+        finish({
+          name: server.name,
+          url: server.url,
+          status: 'down',
+          error: 'HTTP ' + response.status + ': ' + response.statusText
+        });
+      }
+    })
+    .catch(function(error) {
+      var errorMsg = 'Connection failed';
+      if (error.message) {
+        if (error.message.indexOf('CORS') > -1 || error.message.indexOf('NetworkError') > -1) {
+          errorMsg = 'CORS error - Enable CORS on server or use proxy';
+        } else {
+          errorMsg = error.message;
+        }
+      }
+      finish({
+        name: server.name,
+        url: server.url,
+        status: 'down',
+        error: errorMsg
+      });
+    });
+  });
+}
+
+function checkAllServers() {
+  servers = parseConfig();
+  
+  if (servers.length === 0) {
+    showMessage('⚠️ Please configure at least one server URL', 'error');
+    return;
+  }
+  
+  var btn = document.getElementById('checkBtn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Checking...';
+  
+  var pendingServers = servers.map(function(s) {
+    return { name: s.name, url: s.url, status: 'pending' };
+  });
+  updateGrid(pendingServers);
+  updateSummary(pendingServers);
+  
+  var promises = servers.map(function(server) {
+    return checkServer(server);
+  });
+  
+  Promise.all(promises).then(function(results) {
+    servers = results;
+    updateGrid(servers);
+    updateSummary(servers);
+    
+    btn.disabled = false;
+    btn.innerHTML = '🔄 Check All Servers';
+    
+    var now = new Date();
+    document.getElementById('lastCheck').textContent = 'Last checked: ' + now.toLocaleString();
+    
+    var downCount = results.filter(function(r) { return r.status === 'down'; }).length;
+    if (downCount === 0) {
+      showMessage('✅ All servers are healthy!', 'success');
+    } else {
+      showMessage('⚠️ ' + downCount + ' server(s) down', 'error');
+    }
+  });
+}
+
+function clearResults() {
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('lastCheck').textContent = '';
+  document.getElementById('total').textContent = '0';
+  document.getElementById('up').textContent = '0';
+  document.getElementById('down').textContent = '0';
+  document.getElementById('message').style.display = 'none';
+}
+</script>
+
+</body>
+</html>
