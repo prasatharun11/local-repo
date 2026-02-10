@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Health Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .summary {
+            display: flex;
+            gap: 15px;
+            margin-left: auto;
+            align-items: center;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .summary-up {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .summary-down {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .summary-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .server-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            border-left: 5px solid #ccc;
+        }
+
+        .server-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .server-card.up {
+            border-left-color: #28a745;
+        }
+
+        .server-card.down {
+            border-left-color: #dc3545;
+        }
+
+        .server-card.checking {
+            border-left-color: #ffc107;
+        }
+
+        .server-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .server-name {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #333;
+            word-break: break-word;
+        }
+
+        .status-badge {
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-up {
+            background: #28a745;
+            color: white;
+        }
+
+        .status-down {
+            background: #dc3545;
+            color: white;
+        }
+
+        .status-checking {
+            background: #ffc107;
+            color: #333;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .status-pending {
+            background: #6c757d;
+            color: white;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .server-url {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            word-break: break-all;
+        }
+
+        .server-details {
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .detail-row {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .detail-value {
+            color: #666;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 0.85em;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8d7da;
+            border-radius: 5px;
+        }
+
+        .last-checked {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        .loader {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #333;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .config-section {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .config-section h2 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .config-help {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 Server Health Monitor</h1>
+            <p class="subtitle">Real-time monitoring of Spring Boot Actuator endpoints</p>
+        </div>
+
+        <div class="config-section">
+            <h2>⚙️ Server Configuration</h2>
+            <textarea id="serverConfig" placeholder="Enter server URLs, one per line in format: ServerName | http://server.com/actuator/health">Server 1 | http://localhost:8080/actuator/health
+Server 2 | http://localhost:8081/actuator/health
+Server 3 | http://localhost:8082/actuator/health</textarea>
+            <div class="config-help">
+                💡 Enter each server on a new line in format: <strong>Server Name | URL</strong>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="checkAllBtn" onclick="checkAllServers()">
+                🔄 Check All Servers
+            </button>
+            <button class="btn btn-secondary" onclick="clearResults()">
+                🗑️ Clear Results
+            </button>
+            <div class="summary">
+                <div class="summary-item summary-up">
+                    <span>✅ Up:</span>
+                    <strong id="upCount">0</strong>
+                </div>
+                <div class="summary-item summary-down">
+                    <span>❌ Down:</span>
+                    <strong id="downCount">0</strong>
+                </div>
+                <div class="summary-item summary-pending">
+                    <span>⏳ Pending:</span>
+                    <strong id="pendingCount">0</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="servers-grid" id="serversGrid"></div>
+
+        <div class="last-checked" id="lastChecked"></div>
+    </div>
+
+    <script>
+        let servers = [];
+        let checkTimeout = 10000; // 10 seconds timeout
+
+        function parseServerConfig() {
+            const config = document.getElementById('serverConfig').value;
+            const lines = config.split('\n').filter(line => line.trim());
+            
+            servers = lines.map((line, index) => {
+                const parts = line.split('|').map(p => p.trim());
+                if (parts.length === 2) {
+                    return {
+                        name: parts[0],
+                        url: parts[1]
+                    };
+                } else if (parts.length === 1 && parts[0]) {
+                    return {
+                        name: `Server ${index + 1}`,
+                        url: parts[0]
+                    };
+                }
+                return null;
+            }).filter(server => server !== null);
+
+            updateSummary();
+        }
+
+        function createServerCard(server, index) {
+            return `
+                <div class="server-card" id="server-${index}">
+                    <div class="server-header">
+                        <div class="server-name">${server.name}</div>
+                        <span class="status-badge status-pending">Pending</span>
+                    </div>
+                    <div class="server-url">${server.url}</div>
+                    <div class="server-details" id="details-${index}">
+                        <div class="detail-row">
+                            <span class="detail-label">Status:</span>
+                            <span class="detail-value">Not checked yet</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateServerCard(index, status, data, error) {
+            const card = document.getElementById(`server-${index}`);
+            const details = document.getElementById(`details-${index}`);
+            
+            card.className = `server-card ${status}`;
+            
+            let statusBadge = card.querySelector('.status-badge');
+            if (status === 'up') {
+                statusBadge.className = 'status-badge status-up';
+                statusBadge.innerHTML = '✅ UP';
+            } else if (status === 'down') {
+                statusBadge.className = 'status-badge status-down';
+                statusBadge.innerHTML = '❌ DOWN';
+            } else if (status === 'checking') {
+                statusBadge.className = 'status-badge status-checking';
+                statusBadge.innerHTML = '<span class="loader"></span> Checking...';
+            }
+
+            let detailsHTML = '';
+            
+            if (status === 'up' && data) {
+                detailsHTML = `
+                    <div class="detail-row">
+                        <span class="detail-label">Status:</span>
+                        <span class="detail-value" style="color: #28a745; font-weight: 600;">${data.status || 'UP'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Response Time:</span>
+                        <span class="detail-value">${data.responseTime || 'N/A'}</span>
+                    </div>
+                `;
+                
+                if (data.components) {
+                    detailsHTML += `
+                        <div class="detail-row">
+                            <span class="detail-label">Components:</span>
+                            <span class="detail-value">${Object.keys(data.components).length}</span>
+                        </div>
+                    `;
+                }
+            } else if (status === 'down') {
+                detailsHTML = `
+                    <div class="detail-row">
+                        <span class="detail-label">Status:</span>
+                        <span class="detail-value" style="color: #dc3545; font-weight: 600;">DOWN</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Error:</span>
+                        <span class="detail-value">${error || 'Connection failed'}</span>
+                    </div>
+                `;
+            }
+            
+            details.innerHTML = detailsHTML;
+        }
+
+        async function checkServer(server, index) {
+            updateServerCard(index, 'checking');
+            
+            const startTime = Date.now();
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), checkTimeout);
+                
+                const response = await fetch(server.url, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                const responseTime = Date.now() - startTime;
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    data.responseTime = `${responseTime}ms`;
+                    updateServerCard(index, 'up', data);
+                    return 'up';
+                } else {
+                    updateServerCard(index, 'down', null, `HTTP ${response.status}: ${response.statusText}`);
+                    return 'down';
+                }
+            } catch (error) {
+                let errorMessage = 'Connection failed';
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Request timeout (>10s)';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                updateServerCard(index, 'down', null, errorMessage);
+                return 'down';
+            }
+        }
+
+        async function checkAllServers() {
+            parseServerConfig();
+            
+            if (servers.length === 0) {
+                alert('Please configure at least one server URL');
+                return;
+            }
+
+            const grid = document.getElementById('serversGrid');
+            grid.innerHTML = servers.map((server, index) => createServerCard(server, index)).join('');
+            
+            const btn = document.getElementById('checkAllBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader"></span> Checking...';
+            
+            const promises = servers.map((server, index) => checkServer(server, index));
+            await Promise.all(promises);
+            
+            btn.disabled = false;
+            btn.innerHTML = '🔄 Check All Servers';
+            
+            updateSummary();
+            updateLastChecked();
+        }
+
+        function updateSummary() {
+            const cards = document.querySelectorAll('.server-card');
+            let upCount = 0;
+            let downCount = 0;
+            let pendingCount = 0;
+            
+            cards.forEach(card => {
+                if (card.classList.contains('up')) upCount++;
+                else if (card.classList.contains('down')) downCount++;
+                else pendingCount++;
+            });
+            
+            document.getElementById('upCount').textContent = upCount;
+            document.getElementById('downCount').textContent = downCount;
+            document.getElementById('pendingCount').textContent = pendingCount;
+        }
+
+        function updateLastChecked() {
+            const now = new Date();
+            const formatted = now.toLocaleString();
+            document.getElementById('lastChecked').textContent = `Last checked: ${formatted}`;
+        }
+
+        function clearResults() {
+            document.getElementById('serversGrid').innerHTML = '';
+            document.getElementById('lastChecked').textContent = '';
+            document.getElementById('upCount').textContent = '0';
+            document.getElementById('downCount').textContent = '0';
+            document.getElementById('pendingCount').textContent = '0';
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            parseServerConfig();
+        };
+    </script>
+</body>
+</html>
