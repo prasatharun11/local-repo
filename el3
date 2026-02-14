@@ -1,0 +1,9 @@
+document.querySelectorAll('input[name="clm-sym"]').forEach(radio => {
+    radio.addEventListener('click', function () {
+        somefunc(
+            this.dataset.a,
+            this.dataset.b,
+            this.dataset.c
+        );
+    });
+});
