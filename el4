@@ -1,0 +1,28 @@
+document.querySelectorAll('input[name="clm-sym"]').forEach(el => {
+
+    const onclickText = el.getAttribute("onclick");
+
+    let fnName = null;
+    let params = [];
+
+    if (onclickText) {
+        const match = onclickText.match(/^([^(]+)\(([^)]*)\)$/);
+
+        if (match) {
+            fnName = match[1];
+            params = match[2].split(",").map(v => v.trim());
+        }
+    }
+
+    el.addEventListener("click", function () {
+
+        console.log("Clicked →", fnName, params);
+
+        // Optional: call function dynamically
+        if (fnName && typeof window[fnName] === "function") {
+            window[fnName](...params);
+        }
+
+    });
+
+});
