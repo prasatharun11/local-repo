@@ -1,0 +1,25 @@
+document.querySelectorAll('input[name="clm-sym"]').forEach(el => {
+
+    const onclickText = el.getAttribute("onclick");
+
+    if (!onclickText) return;
+
+    // Remove ending semicolon
+    const cleanText = onclickText.trim().replace(/;$/, '');
+
+    // Match function + params
+    const match = cleanText.match(/^([^(]+)\((.*)\)$/);
+
+    if (!match) return;
+
+    const functionName = match[1].trim();
+    const paramString = match[2].trim();
+
+    // Split params safely (handles commas inside quotes)
+    const params = paramString.match(/(".*?"|'.*?'|[^,]+)/g)
+        ?.map(p => p.trim().replace(/^['"]|['"]$/g, ''));
+
+    console.log("Function:", functionName);
+    console.log("Params:", params);
+
+});
