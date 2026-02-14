@@ -1,0 +1,9 @@
+radios.forEach(radio => {
+    radio.addEventListener('click', function(e) {
+        if (typeof this.onclick === "function") {
+            this.onclick(e);
+        }
+
+        console.log("My custom logic");
+    });
+});
