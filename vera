@@ -1,0 +1,44 @@
+Hi Team,
+
+We are encountering a Jenkins build failure related to the Veracode Pipeline Gate plugin with the following error:
+
+  Error Code: VEPSE003
+  Message: Veracode Pipeline Gate Plugin Generic Exception – Overall SAST gate has failed.
+
+Upon investigation, the root cause appears to be that Veracode is prompting for module selection of our JAR file during the scan. However, this JAR does not contain any scannable source code such as Java (.java/.class), JavaScript (.js), or similar supported languages.
+
+The JAR exclusively contains WebFOCUS report and procedure files with the following extensions:
+  • .fex – WebFOCUS report procedures
+  • .foc – WebFOCUS compiled/focalized files
+
+These file types are proprietary to the Information Builders / TIBCO WebFOCUS platform and are not supported by Veracode's SAST engine. As a result, there is no valid module for Veracode to scan, which is causing the gate to fail and blocking our pipeline.
+
+Requested Action:
+Could you please help with one of the following resolutions:
+  1. Exclude this specific JAR / module from the Veracode SAST scan policy, or
+  2. Configure the pipeline gate to bypass/waive the SAST requirement for this component, or
+  3. Confirm whether this artifact needs to be flagged as out-of-scope for SAST scanning.
+
+Please let us know if you need any additional details such as the pipeline name, build logs, or Veracode application profile.
+
+Thank you for your support.
+
+Best regards
+
+
+
+
+
+Hi Team,
+
+Our Jenkins pipeline is failing at the Veracode gate (Error: VEPSE003 – SAST gate failed) because Veracode is requesting module selection for a JAR that contains no scannable code.
+
+The JAR only holds WebFOCUS files (.fex and .foc), which are proprietary WebFOCUS platform files — not Java, JavaScript, or any language supported by Veracode SAST.
+
+Could you please either exclude this module from the SAST policy or mark it as out-of-scope so our pipeline can proceed?
+
+Happy to share build logs or the Veracode app profile if needed.
+
+Thanks!
+
+
