@@ -1,0 +1,12 @@
+function updateSelectOption(selectId, value, text) {
+    var $select = $(selectId);
+    var exists = $select.find('option[value="' + value + '"]').length > 0;
+
+    if (exists) {
+        // If value exists → remove all disabled options
+        $select.find('option:disabled').remove();
+    } else {
+        // If value does not exist → add it as disabled
+        $select.append('<option value="' + value + '" disabled>' + text + '</option>');
+    }
+}
