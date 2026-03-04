@@ -1,0 +1,11 @@
+function setSelectValue(id, value) {
+    var $s = $(id);
+
+    if (!$s.find(`option[value="${value}"]`).length) {
+        $s.append(`<option value="${value}" disabled>${value}</option>`);
+    } else {
+        $s.find('option:disabled').remove();
+    }
+
+    $s.val(value);
+}
