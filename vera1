@@ -1,0 +1,31 @@
+Subject: URGENT: Veracode Error Blocking Testing & Production Deployment
+
+Hi SCSA Team,
+
+Our Jenkins build is failing with Veracode error VEPSE003 (SAST gate failed). This is now a critical blocker:
+
+Impact:
+
+· ❌ Testing cannot start until this is resolved
+· ❌ Production deployment is blocked
+· ⚠️ Release timeline is at risk
+
+The Issue:
+
+· Our JAR contains only WebFOCUS files (.fex, .foc extensions)
+· These are reporting/configuration files, not executable code
+· Veracode expects standard languages (Java, JS, etc.) and finds nothing to scan
+· Hence the pipeline fails with a false positive
+
+Immediate Action Needed:
+Please advise urgently:
+
+1. Can this JAR be excluded from Veracode scanning?
+2. Do we need DevOps team to update the pipeline configuration?
+3. Should we verify if any scannable code exists within these files?
+
+This is a production blocker. Request your earliest response to unblock testing and deployment.
+
+Regards,
+[Your Name]
+[Your Contact Information]
