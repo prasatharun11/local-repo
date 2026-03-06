@@ -1,0 +1,19 @@
+Subject: URGENT: Request for Immediate Deployment – Blocker Resolved
+
+Hi DQ Team,
+
+The Veracode issue (Error VEPSE003) that was blocking our build has been resolved now.
+
+Request:
+Since this blocker has been pending for a long time and is impacting the release timeline, I request you to trigger the deployment immediately, outside the standard 5 PM IST deployment window.
+
+Reason for urgency:
+
+· The blocker caused significant delay
+· Testing and production deployment are already behind schedule
+· Further delay will impact the release timeline
+
+Kindly accommodate this early deployment request. Please confirm once triggered.
+
+Thanks,
+[Your Name]
