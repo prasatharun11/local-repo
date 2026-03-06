@@ -1,0 +1,34 @@
+Hi [DQ Team Lead Name],
+
+Hope you're doing well. I'm writing to request your support with an ongoing deployment issue that requires repeated deployment triggers across environments, and I'd like to align with your team on a flexible approach until the root cause is fully resolved.
+
+
+Background & Issue Summary:
+
+We encountered a deployment failure on March 3, which was traced back to a Veracode scanning issue — specifically, there was no scannable module identified. After coordinating with the Veracode team and following their recommendations, we raised a request to remove the application from the Veracode scan. That removal has since been completed.
+
+However, post-removal, when the deployment was triggered again, it continued to fail. The DevOps team has advised us to first get the Dev deployment completed successfully and then promote it to the Model environment. We attempted this as well, but the deployment failed again.
+
+Given the iterative nature of troubleshooting, this issue requires multiple deployment attempts — potentially with the same or different build numbers — across Dev and Model environments before we can hand off to the Testing team.
+
+
+Request:
+
+Currently, deployments are scheduled at standard windows (5:00 PM IST / 3:00 PM EST), and any out-of-window deployment requires approval from your leads — which, understandably, adds significant time to an already complex issue.
+
+Given our Production deployment is planned for March 27, we are working against a tight timeline. We kindly request:
+
+1. Temporary flexibility to trigger deployments on-demand (outside standard windows) until this issue is resolved.
+2. Authorization to re-trigger deployments with the same or updated build numbers as needed, based on inputs from the DevOps/SCSA teams routed through the Development team.
+3. A point of contact on your team who can quickly action deployment requests during this period to avoid multi-team coordination delays.
+
+We understand and respect the standard protocols your team follows, and we want to ensure full visibility and communication at every step. We are happy to provide deployment details, build numbers, and approvals in whatever format works best for your team.
+
+Please let us know if a quick call would help to align on the process.
+
+Thank you for your understanding and support.
+
+Best regards,
+[Your Name]
+[Your Team/Role]
+[Contact Details]
