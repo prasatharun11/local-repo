@@ -1,0 +1,19 @@
+Subject: URGENT: Request for Immediate Deployment – Critical Blocker Resolved
+
+Hi DQ Team,
+
+The Veracode issue (Error VEPSE003) that was blocking our build has been resolved.
+
+Request:
+Request you to trigger the deployment immediately, outside the standard 5 PM IST window due to the following reasons:
+
+1. Already delayed – This blocker caused significant hold-up in the pipeline
+2. Risk of reoccurrence – Though resolved, there's a chance the pipeline may fail again if the Veracode module exclusion doesn't hold. This would require re-engagement with DevOps and SCSA teams, causing additional delays
+3. Validation impact – Any further delay will directly impact DQ validation and subsequent production deployment
+
+To avoid any last-minute setbacks and ensure smooth handover for validation, kindly expedite and trigger the deployment at the earliest.
+
+Please confirm once initiated.
+
+Thanks,
+[Your Name]
