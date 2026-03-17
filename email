@@ -1,0 +1,22 @@
+Hi Team,
+
+Please pull the latest build for deployment to the QA and Model environments.
+
+1. Security Fix & Dependency Context
+We have upgraded assertj-core to 4.0.0-M1 to resolve a high-severity vulnerability (CVE-2026-24400 / CWE-611).
+
+- Dependency Source: This dependency is managed via the XYZ framework JAR.
+- Scope: The JAR is used strictly for JUnit test case files and is not referenced by any functional or core application code.
+- Verification: I have validated the upgrade, and all existing test cases pass successfully with no regressions.
+
+2. Release Alignment (March 27) & Backward Compatibility
+This build is fully backward compatible and includes a minor user story update.
+
+- Change: A conditional check for "usertype: "both"" related to a URL change.
+- Status: This logic has already been verified and deployed up to the Model environment.
+- Production Impact: The system is designed to handle this regardless of whether the ""both"" usertype exists in Production, ensuring zero impact on existing functionality.
+
+Action Required:
+Please promote this build to QA and Model environments for final validation ahead of the March 27 release.
+
+Best regards,
