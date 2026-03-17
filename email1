@@ -1,0 +1,6 @@
+We have upgraded the ACID Framework dependent assertj-core JAR to the latest version to resolve a high-severity vulnerability identified in Veracode (CVE-2026-24400 / CWE-611).
+This build also includes changes related to User Story USxxxxx.
+I would like to confirm that this build is fully backward compatible.
+Change: A conditional check for a URL change when usertype: "Both".
+Status: This logic has already been verified and deployed up to the Model environment.
+Production Impact: The system is designed to handle this regardless of whether the "Both" user type exists in Production, ensuring zero impact on existing functionality.
