@@ -1,0 +1,233 @@
+package com.example.security;
+
+import com.okta.jwt.AccessTokenVerifier;
+import com.okta.jwt.Jwt;
+import com.okta.jwt.JwtVerificationException;
+import com.okta.jwt.JwtVerifiers;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Spring Boot WebSecurityConfig — Okta JWT Validation (Java)
+ *
+ * Based on the official Okta Java guide:
+ * https://developer.okta.com/docs/guides/validate-access-tokens/java/main/
+ *
+ * Uses Okta's own okta-jwt-verifier-java library which handles:
+ *  1. JWKS key retrieval and caching from the OpenID Connect discovery endpoint
+ *  2. Token signature verification (RS256)
+ *  3. Token expiration (exp) validation
+ *  4. Issued-at (iat) validation
+ *  5. Issuer (iss) claim validation
+ *  6. Audience (aud) claim validation
+ *
+ * -------------------------------------------------------------------------
+ * Required Maven dependencies (pom.xml):
+ * -------------------------------------------------------------------------
+ *
+ *   <!-- Okta JWT Verifier — replace version with latest from Maven Central -->
+ *   <dependency>
+ *     <groupId>com.okta.jwt</groupId>
+ *     <artifactId>okta-jwt-verifier</artifactId>
+ *     <version>${okta-jwt.version}</version>
+ *   </dependency>
+ *   <dependency>
+ *     <groupId>com.okta.jwt</groupId>
+ *     <artifactId>okta-jwt-verifier-impl</artifactId>
+ *     <version>${okta-jwt.version}</version>
+ *     <scope>runtime</scope>
+ *   </dependency>
+ *
+ *   <!-- Spring Security OAuth2 Resource Server (for filter chain integration) -->
+ *   <dependency>
+ *     <groupId>org.springframework.boot</groupId>
+ *     <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+ *   </dependency>
+ *
+ * -------------------------------------------------------------------------
+ * Required application.properties:
+ * -------------------------------------------------------------------------
+ *
+ *   okta.issuer-uri=https://{yourOktaDomain}/oauth2/default
+ *   okta.audience=api://default
+ *   okta.connection-timeout-seconds=1
+ *   okta.read-timeout-seconds=1
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity  // enables @PreAuthorize / @PostAuthorize on controllers
+public class WebSecurityConfig {
+
+    /** e.g. https://dev-123456.okta.com/oauth2/default */
+    @Value("${okta.issuer-uri}")
+    private String issuerUri;
+
+    /** e.g. api://default (Okta's default) or your custom audience */
+    @Value("${okta.audience}")
+    private String audience;
+
+    /**
+     * Connection timeout in seconds when fetching JWKS keys.
+     * Okta guide warns: minor network delays can trigger the 1s default timeout
+     * on mobile — keep this verifier on the resource server only, never in a mobile app.
+     */
+    @Value("${okta.connection-timeout-seconds:1}")
+    private long connectionTimeoutSeconds;
+
+    /** Read timeout in seconds when fetching JWKS keys. */
+    @Value("${okta.read-timeout-seconds:1}")
+    private long readTimeoutSeconds;
+
+    // -------------------------------------------------------------------------
+    // Security Filter Chain
+    // -------------------------------------------------------------------------
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            // Stateless REST API — no HTTP sessions required
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+            // CSRF disabled — safe for stateless JWT APIs
+            .csrf(csrf -> csrf.disable())
+
+            // Route-level authorization
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health", "/public/**").permitAll()
+                .anyRequest().authenticated()
+            )
+
+            // Plug in our Okta-backed JWT decoder
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .decoder(oktaJwtDecoder())
+                    .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                )
+            );
+
+        return http.build();
+    }
+
+    // -------------------------------------------------------------------------
+    // Okta AccessTokenVerifier bean
+    // -------------------------------------------------------------------------
+
+    /**
+     * Builds the Okta AccessTokenVerifier using JwtVerifiers.accessTokenVerifierBuilder()
+     * exactly as shown in the Okta Java guide.
+     *
+     * The verifier automatically:
+     *  - Calls the OpenID Connect discovery endpoint to locate the JWKS URI
+     *  - Downloads and caches the public signing keys (refreshed on rotation)
+     *  - Validates exp, iat, iss, and aud on every decode() call
+     *
+     * NOTE: Per the Okta guide, do NOT use this on a mobile client.
+     * This is intended for a resource server / API service only.
+     */
+    @Bean
+    public AccessTokenVerifier accessTokenVerifier() {
+        return JwtVerifiers.accessTokenVerifierBuilder()
+            .setIssuer(issuerUri)
+            .setAudience(audience)                                            // validates aud claim
+            .setConnectionTimeout(Duration.ofSeconds(connectionTimeoutSeconds))
+            .setReadTimeout(Duration.ofSeconds(readTimeoutSeconds))
+            .build();
+    }
+
+    // -------------------------------------------------------------------------
+    // Custom JwtDecoder — wraps Okta's verifier for Spring Security integration
+    // -------------------------------------------------------------------------
+
+    /**
+     * Adapts Okta's AccessTokenVerifier into Spring Security's JwtDecoder interface.
+     *
+     * When a request arrives with a Bearer token, Spring Security calls decoder.decode().
+     * This implementation delegates to okta's verifier.decode(jwtString) — exactly as
+     * shown in the guide — which performs all claim validation, then maps the Okta Jwt
+     * result to a Spring Security Jwt object so the rest of the framework works normally.
+     */
+    @Bean
+    public JwtDecoder oktaJwtDecoder() {
+        AccessTokenVerifier verifier = accessTokenVerifier();
+
+        return token -> {
+            try {
+                // Core validation call from the Okta guide:
+                //   Jwt jwt = jwtVerifier.decode(jwtString);
+                // Validates: token signature, exp, iat, iss, aud
+                Jwt oktaJwt = verifier.decode(token);
+
+                // Map Okta's Jwt claims to Spring Security's Jwt object
+                Map<String, Object> claims = new HashMap<>(oktaJwt.getClaims());
+
+                Instant issuedAt  = toInstant(claims.get("iat"));
+                Instant expiresAt = toInstant(claims.get("exp"));
+
+                return org.springframework.security.oauth2.jwt.Jwt.withTokenValue(token)
+                    .headers(h -> h.put("alg", "RS256"))  // Okta always signs with RS256
+                    .claims(c -> c.putAll(claims))
+                    .issuedAt(issuedAt)
+                    .expiresAt(expiresAt)
+                    .build();
+
+            } catch (JwtVerificationException e) {
+                // Wrap Okta's exception into Spring Security's JwtException
+                // so the framework automatically returns a 401 Unauthorized response
+                throw new JwtException("Okta JWT validation failed: " + e.getMessage(), e);
+            }
+        };
+    }
+
+    /**
+     * Safely converts a claim value to an Instant.
+     * Okta returns numeric date claims (iat, exp) as Long (epoch seconds).
+     */
+    private Instant toInstant(Object value) {
+        if (value instanceof Instant)  return (Instant) value;
+        if (value instanceof Long)     return Instant.ofEpochSecond((Long) value);
+        if (value instanceof Integer)  return Instant.ofEpochSecond(((Integer) value).longValue());
+        return null;
+    }
+
+    // -------------------------------------------------------------------------
+    // JWT → Spring Security Authorities mapping
+    // -------------------------------------------------------------------------
+
+    /**
+     * Maps Okta JWT scopes to Spring Security GrantedAuthorities so you can use
+     * @PreAuthorize("hasAuthority('SCOPE_read:items')") on your controllers.
+     *
+     * Reads scopes from Okta's "scp" claim and prefixes them with "SCOPE_".
+     * Example: "read:items" → "SCOPE_read:items"
+     *
+     * To access any other claim in a controller, use:
+     *   @AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt
+     *   jwt.getClaim("aClaimKey")  // mirrors jwt.getClaims().get("aClaimKey") from the guide
+     */
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("scp");   // Okta uses "scp" for scopes
+        authoritiesConverter.setAuthorityPrefix("SCOPE_");
+
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return converter;
+    }
+}
