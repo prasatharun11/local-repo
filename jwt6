@@ -1,0 +1,316 @@
+package com.example.security;
+
+import com.okta.jwt.AccessTokenVerifier;
+import com.okta.jwt.Jwt;
+import com.okta.jwt.JwtVerificationException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.CollectionUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * OktaJwtAuthFilter — OncePerRequestFilter
+ *
+ * Extracts the Bearer JWT from:
+ *   request.getHeader(HttpHeaders.AUTHORIZATION)
+ *
+ * Then iterates over ALL configured Okta issuer verifiers.
+ * The token is accepted the moment ANY verifier validates it successfully.
+ * If the verifier list is empty, or all verifiers reject the token → 401.
+ */
+public class OktaJwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(OktaJwtAuthFilter.class);
+    private static final String BEARER_PREFIX = "Bearer ";
+
+    private final List<AccessTokenVerifier> verifiers;
+
+    public OktaJwtAuthFilter(List<AccessTokenVerifier> verifiers) {
+        // Guard: refuse to start if no verifiers were provided
+        if (CollectionUtils.isEmpty(verifiers)) {
+            throw new IllegalArgumentException(
+                "OktaJwtAuthFilter requires at least one AccessTokenVerifier. " +
+                "Check okta.issuer-uris in application.properties."
+            );
+        }
+        this.verifiers = verifiers;
+        log.info("OktaJwtAuthFilter initialized with {} issuer verifier(s).", verifiers.size());
+    }
+
+    // -------------------------------------------------------------------------
+    // Filter logic
+    // -------------------------------------------------------------------------
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
+        // Step 1: Read the Authorization header
+        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+
+        // Step 2: No Bearer token — pass through (public routes handled by security rules)
+        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Step 3: Strip "Bearer " prefix to get the raw JWT string
+        String token = authHeader.substring(BEARER_PREFIX.length()).trim();
+
+        // Step 4: Try all verifiers — accept if any one passes
+        Jwt validatedJwt = tryValidateAgainstAllIssuers(token);
+
+        if (validatedJwt != null) {
+            // Step 5: Valid — populate Spring Security context and continue
+            String subject = (String) validatedJwt.getClaims().get("sub");
+            List<SimpleGrantedAuthority> authorities = extractAuthorities(validatedJwt);
+
+            UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(subject, validatedJwt, authorities);
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            log.debug("Token validated for subject '{}' on {} {}",
+                subject, request.getMethod(), request.getRequestURI());
+
+            filterChain.doFilter(request, response);
+
+        } else {
+            // Step 6: All verifiers rejected the token — return 401
+            log.warn("Token rejected by all {} verifier(s) on {} {}",
+                verifiers.size(), request.getMethod(), request.getRequestURI());
+            sendUnauthorized(response, "Invalid or expired token.");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Multi-issuer validation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Tries each verifier in the list one by one.
+     *
+     * - If the list has only 1 entry   → single verifier, straightforward check.
+     * - If the list has multiple entries → tries each until one succeeds.
+     * - Returns null only when ALL verifiers in the list have failed.
+     *
+     * Each failed attempt is logged at TRACE level to keep logs clean.
+     */
+    private Jwt tryValidateAgainstAllIssuers(String token) {
+        log.debug("Validating token against {} configured issuer(s).", verifiers.size());
+
+        for (int i = 0; i < verifiers.size(); i++) {
+            try {
+                Jwt validated = verifiers.get(i).decode(token);
+                log.debug("Token accepted by verifier #{} (of {}).", i + 1, verifiers.size());
+                return validated;
+            } catch (JwtVerificationException e) {
+                log.trace("Verifier #{} did not accept token: {}", i + 1, e.getMessage());
+            }
+        }
+
+        // None of the verifiers in the list accepted the token
+        return null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Maps Okta's "scp" claim to Spring GrantedAuthorities.
+     * Handles both List<String> and space-delimited String formats.
+     */
+    @SuppressWarnings("unchecked")
+    private List<SimpleGrantedAuthority> extractAuthorities(Jwt jwt) {
+        Object scp = jwt.getClaims().get("scp");
+
+        if (scp instanceof List) {
+            return ((List<String>) scp).stream()
+                .map(scope -> new SimpleGrantedAuthority("SCOPE_" + scope))
+                .collect(Collectors.toList());
+        }
+        if (scp instanceof String) {
+            return Arrays.stream(((String) scp).split("\\s+"))
+                .map(scope -> new SimpleGrantedAuthority("SCOPE_" + scope))
+                .collect(Collectors.toList());
+        }
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * Sends a 401 Unauthorized JSON response and clears the security context.
+     */
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        SecurityContextHolder.clearContext();
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + message + "\"}");
+    }
+}
+
+
+package com.example.security;
+
+import com.okta.jwt.AccessTokenVerifier;
+import com.okta.jwt.JwtVerifiers;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.CollectionUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * WebSecurityConfig
+ *
+ * Accepts an unbounded list of Okta issuer URLs via application.properties.
+ * Add as many environments as needed — dev, QA, UAT, prod, or more.
+ *
+ * -------------------------------------------------------------------------
+ * application.properties — comma-separated list, any number of URLs:
+ * -------------------------------------------------------------------------
+ *
+ *   okta.audience=abc-application
+ *
+ *   okta.issuer-uris[0]=https://dev-123.okta.com/oauth2/default
+ *   okta.issuer-uris[1]=https://qa-456.okta.com/oauth2/default
+ *   okta.issuer-uris[2]=https://uat-789.okta.com/oauth2/default
+ *   okta.issuer-uris[3]=https://prod-000.okta.com/oauth2/default
+ *
+ *   # Or as a single comma-separated line:
+ *   # okta.issuer-uris=https://dev.okta.com/oauth2/default,https://prod.okta.com/oauth2/default
+ *
+ * Just add or remove entries — no code changes needed.
+ *
+ * -------------------------------------------------------------------------
+ * Required Maven dependencies (pom.xml):
+ * -------------------------------------------------------------------------
+ *
+ *   <dependency>
+ *       <groupId>com.okta.jwt</groupId>
+ *       <artifactId>okta-jwt-verifier</artifactId>
+ *       <version>${okta-jwt.version}</version>
+ *   </dependency>
+ *   <dependency>
+ *       <groupId>com.okta.jwt</groupId>
+ *       <artifactId>okta-jwt-verifier-impl</artifactId>
+ *       <version>${okta-jwt.version}</version>
+ *       <scope>runtime</scope>
+ *   </dependency>
+ *   <dependency>
+ *       <groupId>org.springframework.boot</groupId>
+ *       <artifactId>spring-boot-starter-security</artifactId>
+ *   </dependency>
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class WebSecurityConfig {
+
+    /** Audience shared across all environments — e.g. abc-application */
+    @Value("${okta.audience}")
+    private String audience;
+
+    /**
+     * Unbounded list of Okta issuer URLs.
+     * Spring binds okta.issuer-uris[0], [1], [2]... automatically into this list.
+     * No limit on how many you can add.
+     */
+    @Value("${okta.issuer-uris}")
+    private List<String> issuerUris;
+
+    // -------------------------------------------------------------------------
+    // Build one AccessTokenVerifier per issuer URL in the list
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reads the issuer URI list, validates it is not empty, then builds one
+     * AccessTokenVerifier per entry.
+     *
+     * Startup fails fast with a clear message if the list is missing or empty —
+     * better to catch misconfiguration at boot time than silently reject all tokens.
+     */
+    @Bean
+    public List<AccessTokenVerifier> accessTokenVerifiers() {
+        if (CollectionUtils.isEmpty(issuerUris)) {
+            throw new IllegalStateException(
+                "okta.issuer-uris must contain at least one issuer URL. " +
+                "Check your application.properties."
+            );
+        }
+
+        List<AccessTokenVerifier> verifiers = new ArrayList<>(issuerUris.size());
+
+        for (String uri : issuerUris) {
+            verifiers.add(
+                JwtVerifiers.accessTokenVerifierBuilder()
+                    .setIssuer(uri.trim())
+                    .setAudience(audience)
+                    .build()
+            );
+        }
+
+        // Log how many verifiers were wired up — useful for debugging env config issues
+        // Use a proper logger in production instead of System.out
+        System.out.printf("[OktaSecurity] Registered %d issuer verifier(s):%n", verifiers.size());
+        issuerUris.forEach(uri -> System.out.printf("  -> %s%n", uri.trim()));
+
+        return verifiers;
+    }
+
+    // -------------------------------------------------------------------------
+    // Filter bean
+    // -------------------------------------------------------------------------
+
+    @Bean
+    public OktaJwtAuthFilter oktaJwtAuthFilter() {
+        return new OktaJwtAuthFilter(accessTokenVerifiers());
+    }
+
+    // -------------------------------------------------------------------------
+    // Security Filter Chain
+    // -------------------------------------------------------------------------
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(csrf -> csrf.disable())
+            .formLogin(form -> form.disable())
+            .httpBasic(basic -> basic.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health", "/public/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(oktaJwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}
