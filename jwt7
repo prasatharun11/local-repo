@@ -1,0 +1,162 @@
+package com.example.security;
+
+import com.okta.jwt.AccessTokenVerifier;
+import com.okta.jwt.JwtVerifiers;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.CollectionUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * WebSecurityConfig
+ *
+ * Uses @ConfigurationProperties (via OktaProperties) instead of @Value
+ * to correctly bind YAML lists into List<String>.
+ *
+ * application.yml:
+ *
+ *   okta:
+ *     audience: abc-application
+ *     issuer-uris:
+ *       - https://dev-123456.okta.com/oauth2/default
+ *       - https://qa-789012.okta.com/oauth2/default
+ *       - https://prod-901234.okta.com/oauth2/aus9m2m2EXAMPLE
+ *
+ * Also requires this in pom.xml for @ConfigurationProperties to work:
+ *
+ *   <dependency>
+ *       <groupId>org.springframework.boot</groupId>
+ *       <artifactId>spring-boot-configuration-processor</artifactId>
+ *       <optional>true</optional>
+ *   </dependency>
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@EnableConfigurationProperties(OktaProperties.class)
+public class WebSecurityConfig {
+
+    private final OktaProperties oktaProperties;
+
+    // Inject via constructor — OktaProperties is populated from application.yml
+    public WebSecurityConfig(OktaProperties oktaProperties) {
+        this.oktaProperties = oktaProperties;
+    }
+
+    // -------------------------------------------------------------------------
+    // Build one AccessTokenVerifier per issuer URL in the list
+    // -------------------------------------------------------------------------
+
+    @Bean
+    public List<AccessTokenVerifier> accessTokenVerifiers() {
+        List<String> issuerUris = oktaProperties.getIssuerUris();
+
+        if (CollectionUtils.isEmpty(issuerUris)) {
+            throw new IllegalStateException(
+                "okta.issuer-uris must contain at least one entry in application.yml."
+            );
+        }
+
+        List<AccessTokenVerifier> verifiers = new ArrayList<>(issuerUris.size());
+
+        for (String uri : issuerUris) {
+            verifiers.add(
+                JwtVerifiers.accessTokenVerifierBuilder()
+                    .setIssuer(uri.trim())
+                    .setAudience(oktaProperties.getAudience())
+                    .build()
+            );
+        }
+
+        System.out.printf("[OktaSecurity] Registered %d issuer verifier(s):%n", verifiers.size());
+        issuerUris.forEach(uri -> System.out.printf("  -> %s%n", uri.trim()));
+
+        return verifiers;
+    }
+
+    // -------------------------------------------------------------------------
+    // Filter bean
+    // -------------------------------------------------------------------------
+
+    @Bean
+    public OktaJwtAuthFilter oktaJwtAuthFilter() {
+        return new OktaJwtAuthFilter(accessTokenVerifiers());
+    }
+
+    // -------------------------------------------------------------------------
+    // Security Filter Chain
+    // -------------------------------------------------------------------------
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(csrf -> csrf.disable())
+            .formLogin(form -> form.disable())
+            .httpBasic(basic -> basic.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health", "/public/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(oktaJwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}
+
+
+package com.example.security;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+/**
+ * Binds okta.* properties from application.yml into a typed Java object.
+ *
+ * Replaces @Value — works correctly with YAML lists.
+ *
+ * application.yml:
+ *
+ *   okta:
+ *     audience: abc-application
+ *     issuer-uris:
+ *       - https://dev-123456.okta.com/oauth2/default
+ *       - https://qa-789012.okta.com/oauth2/default
+ *       - https://prod-901234.okta.com/oauth2/aus9m2m2EXAMPLE
+ */
+@Component
+@ConfigurationProperties(prefix = "okta")
+public class OktaProperties {
+
+    private String audience;
+    private List<String> issuerUris;
+
+    public String getAudience() {
+        return audience;
+    }
+
+    public void setAudience(String audience) {
+        this.audience = audience;
+    }
+
+    public List<String> getIssuerUris() {
+        return issuerUris;
+    }
+
+    public void setIssuerUris(List<String> issuerUris) {
+        this.issuerUris = issuerUris;
+    }
+}
+
