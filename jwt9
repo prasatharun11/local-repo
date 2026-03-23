@@ -1,0 +1,1044 @@
+package com.example.security;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.okta.jwt.AccessTokenVerifier;
+import com.okta.jwt.JwtVerificationException;
+import com.okta.jwt.JwtVerifiers;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.Getter;
+import lombok.Setter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.CollectionUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.net.URI;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+// =============================================================================
+// OktaProperties
+//
+// application.yml:
+//
+//   okta:
+//     audience: abc-application
+//     issuer-validation: true
+//     validation-type: uri        # uri | pattern
+//
+//     # validation-type: uri
+//     issuer-uris:
+//       - https://dev-123456.okta.com/oauth2/default
+//       - https://qa-789012.okta.com/oauth2/default
+//       - https://prod-901234.okta.com/oauth2/aus9m2m2EXAMPLE
+//
+//     # validation-type: pattern
+//     issuer-host-pattern: "*.abc.com"   # wildcards supported, e.g. *.abc.com or *.okta.abc.com
+//
+//     # issuer-validation: false  →  expiry check only, no URIs or pattern needed
+// =============================================================================
+
+@Getter
+@Setter
+@ConfigurationProperties(prefix = "okta")
+class OktaProperties {
+    private String audience;
+    private boolean issuerValidation = true;
+    private String validationType    = "uri";
+    private List<String> issuerUris;
+    private String issuerHostPattern;
+}
+
+// =============================================================================
+// ValidationResult
+// =============================================================================
+
+class ValidationResult {
+
+    private final boolean valid;
+    private final Map<String, Object> claims;
+    private final String errorMessage;
+
+    private ValidationResult(boolean valid, Map<String, Object> claims, String errorMessage) {
+        this.valid        = valid;
+        this.claims       = claims;
+        this.errorMessage = errorMessage;
+    }
+
+    static ValidationResult success(Map<String, Object> claims) {
+        return new ValidationResult(true, claims, null);
+    }
+
+    static ValidationResult failure(String errorMessage) {
+        return new ValidationResult(false, null, errorMessage);
+    }
+
+    public boolean isValid()               { return valid; }
+    public Map<String, Object> getClaims() { return claims; }
+    public String getErrorMessage()        { return errorMessage; }
+}
+
+// =============================================================================
+// ValidationStrategy
+// =============================================================================
+
+interface ValidationStrategy {
+    ValidationResult validate(String token);
+}
+
+// =============================================================================
+// UriValidationStrategy
+// Checks: RS256 Signature + Issuer + Audience + Expiry
+// Uses Okta's AccessTokenVerifier — tries each issuer URI until one matches.
+// =============================================================================
+
+class UriValidationStrategy implements ValidationStrategy {
+
+    private static final Logger log = LoggerFactory.getLogger(UriValidationStrategy.class);
+
+    private final List<AccessTokenVerifier> verifiers;
+
+    UriValidationStrategy(List<AccessTokenVerifier> verifiers) {
+        if (CollectionUtils.isEmpty(verifiers)) {
+            throw new IllegalArgumentException(
+                "UriValidationStrategy requires at least one AccessTokenVerifier."
+            );
+        }
+        this.verifiers = verifiers;
+        log.info("UriValidationStrategy initialized with {} verifier(s).", verifiers.size());
+    }
+
+    @Override
+    public ValidationResult validate(String token) {
+        log.debug("URI strategy: validating against {} issuer(s).", verifiers.size());
+        for (int i = 0; i < verifiers.size(); i++) {
+            try {
+                com.okta.jwt.Jwt jwt = verifiers.get(i).decode(token);
+                log.debug("URI strategy: accepted by verifier #{} (of {}).", i + 1, verifiers.size());
+                return ValidationResult.success(new HashMap<>(jwt.getClaims()));
+            } catch (JwtVerificationException e) {
+                log.trace("URI strategy: verifier #{} rejected — {}", i + 1, e.getMessage());
+            }
+        }
+        return ValidationResult.failure("Token rejected by all configured issuer URI verifiers.");
+    }
+}
+
+// =============================================================================
+// PatternValidationStrategy
+// Checks: Issuer host pattern (*.abc.com) + Expiry
+// Decodes the JWT payload directly (no Okta library).
+// Matches the `iss` claim host against the configured wildcard pattern.
+// Pattern examples:
+//   *.abc.com          → matches dev.abc.com, prod.abc.com, qa.okta.abc.com
+//   *.okta.abc.com     → matches dev.okta.abc.com but NOT prod.abc.com
+//   auth.abc.com       → exact host match only
+// =============================================================================
+
+class PatternValidationStrategy implements ValidationStrategy {
+
+    private static final Logger log = LoggerFactory.getLogger(PatternValidationStrategy.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private final String issuerHostPattern;
+
+    PatternValidationStrategy(String issuerHostPattern) {
+        if (issuerHostPattern == null || issuerHostPattern.isBlank()) {
+            throw new IllegalArgumentException(
+                "PatternValidationStrategy requires a non-blank issuer-host-pattern."
+            );
+        }
+        this.issuerHostPattern = issuerHostPattern.trim();
+        log.info("PatternValidationStrategy initialized with pattern: '{}'.", this.issuerHostPattern);
+    }
+
+    @Override
+    public ValidationResult validate(String token) {
+        try {
+            Map<String, Object> claims = decodePayload(token);
+
+            if (isExpired(claims)) {
+                log.warn("Pattern strategy: token is expired.");
+                return ValidationResult.failure("Token has expired.");
+            }
+
+            String issuer = (String) claims.get("iss");
+            if (issuer == null || issuer.isBlank()) {
+                log.warn("Pattern strategy: token has no iss claim.");
+                return ValidationResult.failure("Token is missing the issuer (iss) claim.");
+            }
+
+            if (!matchesPattern(issuer)) {
+                log.warn("Pattern strategy: issuer '{}' does not match pattern '{}'.",
+                    issuer, issuerHostPattern);
+                return ValidationResult.failure(
+                    "Issuer '" + issuer + "' does not match the required host pattern '"
+                        + issuerHostPattern + "'."
+                );
+            }
+
+            log.debug("Pattern strategy: issuer '{}' matched pattern '{}'.",
+                issuer, issuerHostPattern);
+            return ValidationResult.success(claims);
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Pattern strategy: malformed token — {}", e.getMessage());
+            return ValidationResult.failure("Malformed token: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Matches the host of the issuer URI against the configured wildcard pattern.
+     *
+     * The pattern is a host-level glob:
+     *   *.abc.com  → any subdomain of abc.com at any depth
+     *   abc.com    → exact host match only
+     *
+     * Path is intentionally ignored — only the host is checked.
+     * e.g. https://dev.abc.com/oauth2/default  →  host = dev.abc.com
+     */
+    boolean matchesPattern(String issuer) {
+        try {
+            String host = URI.create(issuer).getHost();
+            if (host == null) return false;
+
+            if (!issuerHostPattern.startsWith("*")) {
+                return host.equalsIgnoreCase(issuerHostPattern);
+            }
+
+            // *.abc.com  →  suffix = .abc.com
+            String suffix = issuerHostPattern.substring(1);
+            return host.toLowerCase().endsWith(suffix.toLowerCase());
+
+        } catch (Exception e) {
+            log.warn("Pattern strategy: could not parse issuer URI '{}': {}", issuer, e.getMessage());
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> decodePayload(String token) {
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("JWT must have exactly 3 parts.");
+        }
+        try {
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
+            return MAPPER.readValue(payloadBytes, Map.class);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to decode JWT payload: " + e.getMessage());
+        }
+    }
+
+    boolean isExpired(Map<String, Object> claims) {
+        Object exp = claims.get("exp");
+        if (exp == null) {
+            log.warn("Pattern strategy: no exp claim — treating as expired.");
+            return true;
+        }
+        return Instant.now().isAfter(Instant.ofEpochSecond(((Number) exp).longValue()));
+    }
+}
+
+// =============================================================================
+// ExpiryOnlyValidationStrategy
+// Checks: Expiry only
+// =============================================================================
+
+class ExpiryOnlyValidationStrategy implements ValidationStrategy {
+
+    private static final Logger log = LoggerFactory.getLogger(ExpiryOnlyValidationStrategy.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    ExpiryOnlyValidationStrategy() {
+        log.info("ExpiryOnlyValidationStrategy initialized — expiry check only.");
+    }
+
+    @Override
+    public ValidationResult validate(String token) {
+        try {
+            Map<String, Object> claims = decodePayload(token);
+
+            if (isExpired(claims)) {
+                log.warn("Expiry-only strategy: token is expired.");
+                return ValidationResult.failure("Token has expired.");
+            }
+
+            log.debug("Expiry-only strategy: token is valid.");
+            return ValidationResult.success(claims);
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Expiry-only strategy: malformed token — {}", e.getMessage());
+            return ValidationResult.failure("Malformed token: " + e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> decodePayload(String token) {
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("JWT must have exactly 3 parts.");
+        }
+        try {
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
+            return MAPPER.readValue(payloadBytes, Map.class);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to decode JWT payload: " + e.getMessage());
+        }
+    }
+
+    boolean isExpired(Map<String, Object> claims) {
+        Object exp = claims.get("exp");
+        if (exp == null) {
+            log.warn("Expiry-only strategy: no exp claim — treating as expired.");
+            return true;
+        }
+        return Instant.now().isAfter(Instant.ofEpochSecond(((Number) exp).longValue()));
+    }
+}
+
+// =============================================================================
+// OktaJwtAuthFilter
+// =============================================================================
+
+class OktaJwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(OktaJwtAuthFilter.class);
+    private static final String BEARER_PREFIX = "Bearer ";
+
+    private final ValidationStrategy strategy;
+
+    OktaJwtAuthFilter(ValidationStrategy strategy) {
+        if (strategy == null) {
+            throw new IllegalArgumentException("ValidationStrategy must not be null.");
+        }
+        this.strategy = strategy;
+        log.info("OktaJwtAuthFilter initialized with strategy: {}",
+            strategy.getClass().getSimpleName());
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+
+        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String token = authHeader.substring(BEARER_PREFIX.length()).trim();
+        ValidationResult result = strategy.validate(token);
+
+        if (result.isValid()) {
+            setAuthentication(result.getClaims(), token);
+            log.debug("Token validated for subject '{}' on {} {}",
+                result.getClaims().get("sub"), request.getMethod(), request.getRequestURI());
+            filterChain.doFilter(request, response);
+        } else {
+            log.warn("Token validation failed on {} {}: {}",
+                request.getMethod(), request.getRequestURI(), result.getErrorMessage());
+            sendUnauthorized(response, result.getErrorMessage());
+        }
+    }
+
+    private void setAuthentication(Map<String, Object> claims, String rawToken) {
+        String subject = (String) claims.get("sub");
+        List<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(subject, rawToken, authorities)
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<SimpleGrantedAuthority> extractAuthorities(Map<String, Object> claims) {
+        Object scp = claims.get("scp");
+
+        if (scp instanceof List) {
+            return ((List<String>) scp).stream()
+                .map(scope -> new SimpleGrantedAuthority("SCOPE_" + scope))
+                .collect(Collectors.toList());
+        }
+        if (scp instanceof String) {
+            return Arrays.stream(((String) scp).split("\\s+"))
+                .map(scope -> new SimpleGrantedAuthority("SCOPE_" + scope))
+                .collect(Collectors.toList());
+        }
+
+        return Collections.emptyList();
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        SecurityContextHolder.clearContext();
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType("application/json");
+        response.getWriter().write(
+            "{\"error\": \"Unauthorized\", \"message\": \"" + message + "\"}"
+        );
+    }
+}
+
+// =============================================================================
+// WebSecurityConfig
+// =============================================================================
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@EnableConfigurationProperties(OktaProperties.class)
+public class WebSecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(WebSecurityConfig.class);
+
+    private final OktaProperties oktaProperties;
+
+    public WebSecurityConfig(OktaProperties oktaProperties) {
+        this.oktaProperties = oktaProperties;
+    }
+
+    @Bean
+    public ValidationStrategy validationStrategy() {
+        if (!oktaProperties.isIssuerValidation()) {
+            log.info("Issuer validation DISABLED — using ExpiryOnlyValidationStrategy.");
+            return new ExpiryOnlyValidationStrategy();
+        }
+
+        String type = oktaProperties.getValidationType();
+
+        if ("uri".equalsIgnoreCase(type)) {
+            log.info("Validation type: URI — using UriValidationStrategy.");
+            return new UriValidationStrategy(buildUriVerifiers());
+        }
+
+        if ("pattern".equalsIgnoreCase(type)) {
+            log.info("Validation type: PATTERN — using PatternValidationStrategy.");
+            return new PatternValidationStrategy(oktaProperties.getIssuerHostPattern());
+        }
+
+        throw new IllegalStateException(
+            "Unknown okta.validation-type: '" + type + "'. Supported values: 'uri', 'pattern'."
+        );
+    }
+
+    @Bean
+    public OktaJwtAuthFilter oktaJwtAuthFilter() {
+        return new OktaJwtAuthFilter(validationStrategy());
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(csrf -> csrf.disable())
+            .formLogin(form -> form.disable())
+            .httpBasic(basic -> basic.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health", "/public/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(oktaJwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    private List<AccessTokenVerifier> buildUriVerifiers() {
+        List<String> uris = oktaProperties.getIssuerUris();
+        if (CollectionUtils.isEmpty(uris)) {
+            throw new IllegalStateException(
+                "okta.issuer-uris must contain at least one entry when validation-type is 'uri'."
+            );
+        }
+        return uris.stream()
+            .map(uri -> JwtVerifiers.accessTokenVerifierBuilder()
+                .setIssuer(uri.trim())
+                .setAudience(oktaProperties.getAudience())
+                .build())
+            .collect(Collectors.toList());
+    }
+}
+
+
+package com.example.security;
+
+import com.okta.jwt.AccessTokenVerifier;
+import com.okta.jwt.Jwt;
+import com.okta.jwt.JwtVerificationException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.test.context.TestPropertySource;
+
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+// =============================================================================
+// OktaPropertiesTest
+// =============================================================================
+
+class OktaPropertiesTest {
+
+    private OktaProperties props;
+
+    @BeforeEach
+    void setUp() { props = new OktaProperties(); }
+
+    @Nested
+    class Defaults {
+        @Test void issuerValidation_defaultsToTrue()  { assertTrue(props.isIssuerValidation()); }
+        @Test void validationType_defaultsToUri()     { assertEquals("uri", props.getValidationType()); }
+        @Test void audience_defaultsToNull()          { assertNull(props.getAudience()); }
+        @Test void issuerUris_defaultsToNull()        { assertNull(props.getIssuerUris()); }
+        @Test void issuerHostPattern_defaultsToNull() { assertNull(props.getIssuerHostPattern()); }
+    }
+
+    @Nested
+    class Setters {
+        @Test
+        void setAndGetAudience() {
+            props.setAudience("abc-application");
+            assertEquals("abc-application", props.getAudience());
+        }
+
+        @Test
+        void setIssuerValidationFalse() {
+            props.setIssuerValidation(false);
+            assertFalse(props.isIssuerValidation());
+        }
+
+        @Test
+        void setValidationTypePattern() {
+            props.setValidationType("pattern");
+            assertEquals("pattern", props.getValidationType());
+        }
+
+        @Test
+        void setAndGetIssuerUris() {
+            List<String> uris = List.of("https://dev.okta.com/oauth2/default");
+            props.setIssuerUris(uris);
+            assertEquals(uris, props.getIssuerUris());
+        }
+
+        @Test
+        void setAndGetIssuerHostPattern() {
+            props.setIssuerHostPattern("*.abc.com");
+            assertEquals("*.abc.com", props.getIssuerHostPattern());
+        }
+
+        @Test
+        void overwriteAudience() {
+            props.setAudience("old");
+            props.setAudience("abc-application");
+            assertEquals("abc-application", props.getAudience());
+        }
+
+        @Test
+        void overwriteIssuerUris() {
+            props.setIssuerUris(List.of("https://old.okta.com/oauth2/default"));
+            props.setIssuerUris(List.of("https://new.okta.com/oauth2/default"));
+            assertEquals("https://new.okta.com/oauth2/default", props.getIssuerUris().get(0));
+        }
+
+        @Test
+        void overwriteIssuerHostPattern() {
+            props.setIssuerHostPattern("*.old.com");
+            props.setIssuerHostPattern("*.abc.com");
+            assertEquals("*.abc.com", props.getIssuerHostPattern());
+        }
+    }
+}
+
+// =============================================================================
+// ValidationResultTest
+// =============================================================================
+
+class ValidationResultTest {
+
+    @Test
+    void success_isValidTrue() {
+        assertTrue(ValidationResult.success(Map.of("sub", "user@example.com")).isValid());
+    }
+
+    @Test
+    void success_claimsPopulated() {
+        Map<String, Object> claims = Map.of("sub", "user@example.com");
+        assertEquals(claims, ValidationResult.success(claims).getClaims());
+    }
+
+    @Test
+    void success_errorMessageIsNull() {
+        assertNull(ValidationResult.success(Map.of()).getErrorMessage());
+    }
+
+    @Test
+    void failure_isValidFalse() {
+        assertFalse(ValidationResult.failure("expired").isValid());
+    }
+
+    @Test
+    void failure_errorMessagePopulated() {
+        assertEquals("expired", ValidationResult.failure("expired").getErrorMessage());
+    }
+
+    @Test
+    void failure_claimsIsNull() {
+        assertNull(ValidationResult.failure("expired").getClaims());
+    }
+}
+
+// =============================================================================
+// UriValidationStrategyTest
+// =============================================================================
+
+@ExtendWith(MockitoExtension.class)
+class UriValidationStrategyTest {
+
+    @Mock private AccessTokenVerifier verifier1;
+    @Mock private AccessTokenVerifier verifier2;
+    @Mock private Jwt mockJwt;
+
+    @Nested
+    class Constructor {
+        @Test
+        void throwsWhenVerifiersNull() {
+            assertThrows(IllegalArgumentException.class,
+                () -> new UriValidationStrategy(null));
+        }
+
+        @Test
+        void throwsWhenVerifiersEmpty() {
+            assertThrows(IllegalArgumentException.class,
+                () -> new UriValidationStrategy(Collections.emptyList()));
+        }
+
+        @Test
+        void succeedsWithOneVerifier() {
+            assertDoesNotThrow(() -> new UriValidationStrategy(List.of(verifier1)));
+        }
+    }
+
+    @Nested
+    class Validate {
+        @Test
+        void firstVerifierMatches_returnsSuccess() throws Exception {
+            UriValidationStrategy strategy = new UriValidationStrategy(List.of(verifier1, verifier2));
+            when(verifier1.decode("token")).thenReturn(mockJwt);
+            when(mockJwt.getClaims()).thenReturn(Map.of("sub", "user@example.com"));
+
+            ValidationResult result = strategy.validate("token");
+
+            assertTrue(result.isValid());
+            verify(verifier2, never()).decode(any());
+        }
+
+        @Test
+        void firstFails_secondMatches() throws Exception {
+            UriValidationStrategy strategy = new UriValidationStrategy(List.of(verifier1, verifier2));
+            when(verifier1.decode("token")).thenThrow(new JwtVerificationException("wrong issuer"));
+            when(verifier2.decode("token")).thenReturn(mockJwt);
+            when(mockJwt.getClaims()).thenReturn(Map.of("sub", "user@example.com"));
+
+            ValidationResult result = strategy.validate("token");
+
+            assertTrue(result.isValid());
+            verify(verifier1).decode("token");
+            verify(verifier2).decode("token");
+        }
+
+        @Test
+        void allVerifiersFail_returnsFailure() throws Exception {
+            UriValidationStrategy strategy = new UriValidationStrategy(List.of(verifier1, verifier2));
+            when(verifier1.decode("token")).thenThrow(new JwtVerificationException("expired"));
+            when(verifier2.decode("token")).thenThrow(new JwtVerificationException("bad sig"));
+
+            assertFalse(strategy.validate("token").isValid());
+        }
+
+        @Test
+        void claimsAreCopiedFromOktaJwt() throws Exception {
+            UriValidationStrategy strategy = new UriValidationStrategy(List.of(verifier1));
+            Map<String, Object> claims = Map.of("sub", "user@example.com", "scp", List.of("read:items"));
+            when(verifier1.decode("token")).thenReturn(mockJwt);
+            when(mockJwt.getClaims()).thenReturn(claims);
+
+            assertEquals(claims, strategy.validate("token").getClaims());
+        }
+    }
+}
+
+// =============================================================================
+// PatternValidationStrategyTest
+// =============================================================================
+
+class PatternValidationStrategyTest {
+
+    private PatternValidationStrategy strategy;
+
+    private String buildJwt(Long expEpochSecond, String issuer, String extraClaims) {
+        String header  = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("{\"alg\":\"RS256\"}".getBytes());
+        String payloadJson = "{\"sub\":\"user@example.com\""
+            + (issuer != null ? ",\"iss\":\"" + issuer + "\"" : "")
+            + (expEpochSecond != null ? ",\"exp\":" + expEpochSecond : "")
+            + (extraClaims != null ? "," + extraClaims : "")
+            + "}";
+        String payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(payloadJson.getBytes());
+        return header + "." + payload + ".fakesig";
+    }
+
+    @Nested
+    class Constructor {
+        @Test
+        void throwsWhenPatternNull() {
+            assertThrows(IllegalArgumentException.class,
+                () -> new PatternValidationStrategy(null));
+        }
+
+        @Test
+        void throwsWhenPatternBlank() {
+            assertThrows(IllegalArgumentException.class,
+                () -> new PatternValidationStrategy("   "));
+        }
+
+        @Test
+        void succeedsWithValidPattern() {
+            assertDoesNotThrow(() -> new PatternValidationStrategy("*.abc.com"));
+        }
+    }
+
+    @Nested
+    class MatchesPattern {
+
+        @BeforeEach
+        void setUp() { strategy = new PatternValidationStrategy("*.abc.com"); }
+
+        @Test
+        void subdomain_matches()                { assertTrue(strategy.matchesPattern("https://dev.abc.com/oauth2/default")); }
+        @Test
+        void deepSubdomain_matches()            { assertTrue(strategy.matchesPattern("https://dev.okta.abc.com/oauth2/default")); }
+        @Test
+        void differentDomain_noMatch()          { assertFalse(strategy.matchesPattern("https://dev.xyz.com/oauth2/default")); }
+        @Test
+        void exactDomain_noMatch()              { assertFalse(strategy.matchesPattern("https://abc.com/oauth2/default")); }
+        @Test
+        void nullIssuer_returnsFalse()          { assertFalse(strategy.matchesPattern(null)); }
+        @Test
+        void malformedUri_returnsFalse()        { assertFalse(strategy.matchesPattern("not a uri")); }
+
+        @Test
+        void exactPatternWithoutWildcard_exactMatch() {
+            PatternValidationStrategy exact = new PatternValidationStrategy("auth.abc.com");
+            assertTrue(exact.matchesPattern("https://auth.abc.com/oauth2/default"));
+            assertFalse(exact.matchesPattern("https://dev.abc.com/oauth2/default"));
+        }
+
+        @Test
+        void pathIsIgnored_onlyHostMatters() {
+            assertTrue(strategy.matchesPattern("https://dev.abc.com/some/deep/path"));
+        }
+
+        @Test
+        void caseInsensitiveMatch() {
+            assertTrue(strategy.matchesPattern("https://DEV.ABC.COM/oauth2/default"));
+        }
+    }
+
+    @Nested
+    class ValidToken {
+
+        @BeforeEach
+        void setUp() { strategy = new PatternValidationStrategy("*.abc.com"); }
+
+        @Test
+        void validIssuerAndExpiry_returnsSuccess() {
+            String token = buildJwt(Instant.now().plusSeconds(3600).getEpochSecond(),
+                "https://dev.abc.com/oauth2/default", null);
+            assertTrue(strategy.validate(token).isValid());
+        }
+
+        @Test
+        void validToken_subjectInClaims() {
+            String token = buildJwt(Instant.now().plusSeconds(3600).getEpochSecond(),
+                "https://dev.abc.com/oauth2/default", null);
+            assertEquals("user@example.com", strategy.validate(token).getClaims().get("sub"));
+        }
+
+        @Test
+        void validToken_issuerInClaims() {
+            String token = buildJwt(Instant.now().plusSeconds(3600).getEpochSecond(),
+                "https://dev.abc.com/oauth2/default", null);
+            assertEquals("https://dev.abc.com/oauth2/default",
+                strategy.validate(token).getClaims().get("iss"));
+        }
+    }
+
+    @Nested
+    class InvalidToken {
+
+        @BeforeEach
+        void setUp() { strategy = new PatternValidationStrategy("*.abc.com"); }
+
+        @Test
+        void expiredToken_returnsFailure() {
+            String token = buildJwt(Instant.now().minusSeconds(3600).getEpochSecond(),
+                "https://dev.abc.com/oauth2/default", null);
+            assertFalse(strategy.validate(token).isValid());
+            assertTrue(strategy.validate(token).getErrorMessage().contains("expired"));
+        }
+
+        @Test
+        void noExpClaim_returnsFailure() {
+            String token = buildJwt(null, "https://dev.abc.com/oauth2/default", null);
+            assertFalse(strategy.validate(token).isValid());
+        }
+
+        @Test
+        void issuerDoesNotMatchPattern_returnsFailure() {
+            String token = buildJwt(Instant.now().plusSeconds(3600).getEpochSecond(),
+                "https://dev.xyz.com/oauth2/default", null);
+            ValidationResult result = strategy.validate(token);
+            assertFalse(result.isValid());
+            assertTrue(result.getErrorMessage().contains("does not match"));
+        }
+
+        @Test
+        void missingIssuerClaim_returnsFailure() {
+            String token = buildJwt(Instant.now().plusSeconds(3600).getEpochSecond(), null, null);
+            ValidationResult result = strategy.validate(token);
+            assertFalse(result.isValid());
+            assertTrue(result.getErrorMessage().contains("missing"));
+        }
+
+        @Test
+        void malformedToken_returnsFailure() {
+            assertFalse(strategy.validate("not.valid").isValid());
+            assertTrue(strategy.validate("not.valid").getErrorMessage().contains("Malformed"));
+        }
+    }
+
+    @Nested
+    class IsExpired {
+
+        @BeforeEach
+        void setUp() { strategy = new PatternValidationStrategy("*.abc.com"); }
+
+        @Test
+        void futureExp_returnsFalse() {
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("exp", (int)(Instant.now().plusSeconds(3600).getEpochSecond()));
+            assertFalse(strategy.isExpired(claims));
+        }
+
+        @Test
+        void pastExp_returnsTrue() {
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("exp", (int)(Instant.now().minusSeconds(3600).getEpochSecond()));
+            assertTrue(strategy.isExpired(claims));
+        }
+
+        @Test
+        void missingExp_returnsTrue() {
+            assertTrue(strategy.isExpired(new HashMap<>()));
+        }
+
+        @Test
+        void expAsLong_handledCorrectly() {
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("exp", Instant.now().plusSeconds(3600).getEpochSecond());
+            assertFalse(strategy.isExpired(claims));
+        }
+    }
+}
+
+// =============================================================================
+// ExpiryOnlyValidationStrategyTest
+// =============================================================================
+
+class ExpiryOnlyValidationStrategyTest {
+
+    private ExpiryOnlyValidationStrategy strategy;
+
+    @BeforeEach
+    void setUp() { strategy = new ExpiryOnlyValidationStrategy(); }
+
+    private String buildJwt(Long expEpochSecond, String extraClaims) {
+        String header  = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("{\"alg\":\"RS256\"}".getBytes());
+        String payloadJson = "{\"sub\":\"user@example.com\""
+            + (expEpochSecond != null ? ",\"exp\":" + expEpochSecond : "")
+            + (extraClaims != null ? "," + extraClaims : "")
+            + "}";
+        String payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(payloadJson.getBytes());
+        return header + "." + payload + ".fakesig";
+    }
+
+    @Nested
+    class ValidToken {
+        @Test
+        void nonExpiredToken_returnsSuccess() {
+            assertTrue(strategy.validate(buildJwt(Instant.now().plusSeconds(3600).getEpochSecond(), null)).isValid());
+        }
+
+        @Test
+        void validToken_subjectInClaims() {
+            assertEquals("user@example.com",
+                strategy.validate(buildJwt(Instant.now().plusSeconds(3600).getEpochSecond(), null))
+                    .getClaims().get("sub"));
+        }
+    }
+
+    @Nested
+    class ExpiredToken {
+        @Test
+        void expiredToken_returnsFailure() {
+            assertFalse(strategy.validate(buildJwt(Instant.now().minusSeconds(3600).getEpochSecond(), null)).isValid());
+        }
+
+        @Test
+        void expiredToken_errorMessageContainsExpired() {
+            assertTrue(strategy.validate(buildJwt(Instant.now().minusSeconds(3600).getEpochSecond(), null))
+                .getErrorMessage().contains("expired"));
+        }
+
+        @Test
+        void noExpClaim_returnsFailure() {
+            assertFalse(strategy.validate(buildJwt(null, null)).isValid());
+        }
+    }
+
+    @Nested
+    class MalformedToken {
+        @Test
+        void twoParts_returnsFailure()                    { assertFalse(strategy.validate("header.payload").isValid()); }
+        @Test
+        void fourParts_returnsFailure()                   { assertFalse(strategy.validate("a.b.c.d").isValid()); }
+        @Test
+        void invalidBase64Payload_returnsFailure()        { assertFalse(strategy.validate("header.!!!.sig").isValid()); }
+        @Test
+        void malformedToken_errorContainsMalformed() {
+            assertTrue(strategy.validate("header.payload").getErrorMessage().contains("Malformed"));
+        }
+    }
+
+    @Nested
+    class IsExpired {
+        @Test
+        void futureExp_returnsFalse() {
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("exp", (int)(Instant.now().plusSeconds(3600).getEpochSecond()));
+            assertFalse(strategy.isExpired(claims));
+        }
+
+        @Test
+        void pastExp_returnsTrue() {
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("exp", (int)(Instant.now().minusSeconds(3600).getEpochSecond()));
+            assertTrue(strategy.isExpired(claims));
+        }
+
+        @Test
+        void missingExp_returnsTrue()  { assertTrue(strategy.isExpired(new HashMap<>())); }
+
+        @Test
+        void expAsLong_handledCorrectly() {
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("exp", Instant.now().plusSeconds(3600).getEpochSecond());
+            assertFalse(strategy.isExpired(claims));
+        }
+    }
+}
+
+// =============================================================================
+// OktaJwtAuthFilterTest
+// =============================================================================
+
+@ExtendWith(MockitoExtension.class)
+class OktaJwtAuthFilterTest {
+
+    @Mock private ValidationStrategy strategy;
+    @Mock private HttpServletRequest request;
+    @Mock private FilterChain filterChain;
+
+    private MockHttpServletResponse response;
+
+    @BeforeEach
+    void setUp() {
+        response = new MockHttpServletResponse();
+        SecurityContextHolder.clearContext();
+    }
+
+    @AfterEach
+    void tearDown() { SecurityContextHolder.clearContext(); }
+
+    @Nested
+    class Constructor {
+        @Test
+        void throwsWhenStrategyNull() {
+            assertThrows(IllegalArgumentException.class, () -> new OktaJwtAuthFilter(null));
+        }
+
+        @Test
+        void succeedsWithValidStrategy() {
+            assertDoesNotThrow(() -> new OktaJwtAuthFilter(strategy));
+        }
+    }
+
+    @Nested
+    class NoAuthorizationHeader {
+        @Test
+        void nullHeader_passesThrough() throws Exception {
+            OktaJwtAuthFilter filter = new OktaJwtAuthFilter(strategy);
+            when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn(null
+
