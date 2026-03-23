@@ -1,0 +1,33 @@
+# ---------------------------------------------------------
+# COMBO 1 — Full validation via issuer URIs
+# Checks: Signature + Issuer + Audience + Expiry
+# ---------------------------------------------------------
+okta:
+  audience: abc-application
+  issuer-validation: true
+  validation-type: uri
+  issuer-uris:
+    - https://dev-123456.okta.com/oauth2/default
+    - https://prod-901234.okta.com/oauth2/aus9m2m2EXAMPLE
+
+
+# ---------------------------------------------------------
+# COMBO 2 — Signature + Audience + Expiry via JWKS URIs (no issuer check)
+# Checks: Signature + Audience + Expiry
+# ---------------------------------------------------------
+okta:
+  audience: abc-application
+  issuer-validation: true
+  validation-type: jwks
+  jwks-uris:
+    - https://dev-123456.okta.com/oauth2/default/v1/keys
+    - https://prod-901234.okta.com/oauth2/aus9m2m2EXAMPLE/v1/keys
+
+
+# ---------------------------------------------------------
+# COMBO 3 — Expiry only, no Okta calls at all
+# Checks: Expiry only
+# ---------------------------------------------------------
+okta:
+  audience: abc-application
+  issuer-validation: false
