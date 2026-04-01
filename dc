@@ -1,0 +1,26 @@
+tooltip: {
+  useHTML: true,
+  formatter: function () {
+    return `
+      <div class="custom-tooltip">
+        <b>${this.series.name}</b><br/>
+        ${this.x}: ${this.y}<br/>
+        <button class="tooltip-btn">Click</button>
+      </div>
+    `;
+  }
+},
+
+chart: {
+  events: {
+    load: function () {
+      const chart = this;
+
+      document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('tooltip-btn')) {
+          console.log("Tooltip button clicked");
+        }
+      });
+    }
+  }
+}
