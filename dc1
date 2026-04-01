@@ -1,0 +1,44 @@
+formatter: function () {
+  const category = this.x;
+
+  return `
+    <b>${category}</b><br/>
+    ${this.points.map(p => {
+      const seriesName = p.series.name;
+      const value = p.y;
+      const axisIndex = p.series.yAxis.index;
+
+      return `
+        ${seriesName}: 
+        <a href="#" 
+           class="tooltip-btn" 
+           data-series="${seriesName}" 
+           data-value="${value}" 
+           data-axis="${axisIndex}">
+           ${value}
+        </a>
+      `;
+    }).join('<br/>')}
+  `;
+}
+
+document.addEventListener('click', function (e) {
+  if (e.target.classList.contains('tooltip-btn')) {
+    e.preventDefault();
+
+    const series = e.target.getAttribute('data-series');
+    const value = e.target.getAttribute('data-value');
+    const axis = e.target.getAttribute('data-axis');
+
+    console.log("Series:", series);
+    console.log("Value:", value);
+    console.log("Axis:", axis);
+
+    // Example action
+    document.getElementById('output').innerHTML = `
+      <b>${series}</b><br/>
+      Value: ${value}<br/>
+      Axis: ${axis == 0 ? 'Primary' : 'Secondary'}
+    `;
+  }
+});
