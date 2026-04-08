@@ -1,0 +1,184 @@
+// -----------------------------
+// 🔷 CONFIG (reuse your JSP values)
+// -----------------------------
+var oktaConfig = {
+    issuer: document.getElementById("issuer").value,
+    clientId: document.getElementById("iRiskClientID").value,
+    redirectUri: nowlogin,
+    scopes: ['openid', 'email', 'profile', 'intellirisk'],
+    useInteractionCodeFlow: true,   // ✅ REQUIRED for v7
+    tokenManager: {
+        storage: 'sessionStorage'
+    }
+};
+
+// -----------------------------
+// 🔷 INIT AUTH CLIENT
+// -----------------------------
+var authClient = new OktaAuth(oktaConfig);
+
+// -----------------------------
+// 🔷 ENTRY POINT
+// -----------------------------
+$(document).ready(function () {
+    checkSession();
+});
+
+// -----------------------------
+// 🔷 SESSION CHECK LOGIC
+// -----------------------------
+async function checkSession() {
+    try {
+        // 1. Check local tokens
+        const tokens = await authClient.tokenManager.getTokens();
+
+        if (tokens && tokens.accessToken) {
+            console.log("✅ Local session exists");
+            setSessionVariables(tokens);
+            redirectToHome();
+            return;
+        }
+
+        // 2. Check Okta SSO session
+        const sessionExists = await authClient.session.exists();
+
+        if (sessionExists) {
+            console.log("✅ Okta session exists → silent login");
+
+            const tokens = await authClient.token.getWithoutPrompt({
+                responseType: ['token', 'id_token'],
+                scopes: oktaConfig.scopes
+            });
+
+            authClient.tokenManager.setTokens(tokens);
+            setSessionVariables(tokens);
+            redirectToHome();
+            return;
+        }
+
+        // 3. No session → show email UI
+        console.log("❌ No session → show login");
+        showEmailPage();
+
+    } catch (e) {
+        console.error("Session check failed:", e);
+        showEmailPage();
+    }
+}
+
+// -----------------------------
+// 🔷 SHOW EMAIL-FIRST UI
+// -----------------------------
+function showEmailPage() {
+    $("#login-container").show();
+    $("#widget-container").hide();
+}
+
+// -----------------------------
+// 🔷 EMAIL SUBMIT → LOAD WIDGET
+// -----------------------------
+function startLogin() {
+    var email = $("#email").val();
+
+    if (!email) {
+        alert("Enter email");
+        return;
+    }
+
+    $("#login-container").hide();
+    $("#widget-container").show();
+
+    loadWidget(email);
+}
+
+// -----------------------------
+// 🔷 OKTA SIGN-IN WIDGET
+// -----------------------------
+function loadWidget(email) {
+
+    var signInWidgetConfig = {
+        baseUrl: document.getElementById("ciamWidgetsURL").value,
+        clientId: oktaConfig.clientId,
+        redirectUri: oktaConfig.redirectUri,
+        authParams: {
+            issuer: oktaConfig.issuer,
+            scopes: oktaConfig.scopes,
+            pkce: true   // ✅ MUST be true
+        },
+
+        useInteractionCodeFlow: true,
+
+        features: {
+            identifierFirst: true,
+            idpDiscovery: true,
+            rememberMe: false
+        },
+
+        // Pre-fill email
+        username: email,
+
+        // i18n (reuse yours)
+        i18n: {
+            en: {
+                'primaryauth.title': 'Sign In',
+                'primaryauth.username.placeholder': 'Email Address',
+                'primaryauth.password.placeholder': 'Password',
+                'forgotpassword': 'Reset Password'
+            }
+        }
+    };
+
+    var oktaSignIn = new OktaSignIn(signInWidgetConfig);
+
+    // ✅ Modern method (NOT renderEl)
+    oktaSignIn.showSignInToGetTokens({
+        el: '#widget-container'
+    }).then(function (tokens) {
+
+        console.log("✅ Login success");
+
+        authClient.tokenManager.setTokens(tokens);
+        setSessionVariables(tokens);
+        redirectToHome();
+
+    }).catch(function (err) {
+        console.error("Widget error:", err);
+    });
+}
+
+// -----------------------------
+// 🔷 REDIRECT
+// -----------------------------
+function redirectToHome() {
+    window.location.href = "/home.jsp";
+}
+
+// -----------------------------
+// 🔷 SESSION STORAGE (reuse yours)
+// -----------------------------
+function setSessionVariables(tokens) {
+    try {
+        var idToken = tokens.idToken;
+        var accessToken = tokens.accessToken;
+
+        if (idToken) {
+            sessionStorage.setItem("idToken", idToken.idToken);
+        }
+
+        if (accessToken) {
+            sessionStorage.setItem("accessToken", accessToken.accessToken);
+        }
+
+    } catch (e) {
+        console.error("Error setting session:", e);
+    }
+}
+
+// -----------------------------
+// 🔷 LOGOUT (optional)
+// -----------------------------
+function logout() {
+    authClient.signOut({
+        postLogoutRedirectUri: "/login.jsp"
+    });
+}
