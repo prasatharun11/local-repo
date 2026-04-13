@@ -1,0 +1,47 @@
+Here are refined mitigation comments tailored for a Java + JSP + jQuery stack, using terminology reviewers expect for that ecosystem (servlets, filters, request validation, etc.):
+1) CWE-829 – Unrecognized CSP Directive
+Mitigation Comment:
+This finding is a false positive. The application defines a Content Security Policy (CSP) header that includes the directive:
+require-trusted-types-for 'script'
+This is a valid modern CSP directive used to enforce Trusted Types in supported browsers, preventing DOM-based Cross-Site Scripting (XSS) by restricting unsafe script injection through JavaScript (including jQuery DOM manipulation APIs).
+In our Java/JSP application:
+CSP headers are set via server-side configuration (Servlet Filter / HTTP response headers).
+No dynamic inclusion of scripts from untrusted domains is performed.
+All JavaScript resources are either locally hosted or explicitly whitelisted.
+The Veracode scan flags this due to lack of support for newer CSP directives, not due to insecure behavior.
+As confirmed with Veracode support, this is a scanner limitation. The directive strengthens client-side security and does not introduce risk. Therefore, this issue is a false positive.
+2) CWE-352 – Cross-Site Request Forgery (CSRF)
+Mitigation Comment:
+This finding is a false positive. The application implements standard and effective CSRF protection mechanisms consistent with Java web security best practices.
+Implemented controls:
+CSRF tokens are generated per session/request on the server side (Java backend).
+Tokens are embedded in JSP pages (hidden form fields / meta tags).
+All state-changing requests (POST/PUT/DELETE) include the CSRF token.
+Server-side validation is enforced via filters/interceptors before request processing.
+Requests with missing or invalid tokens are rejected.
+jQuery integration:
+CSRF tokens are automatically included in AJAX requests using jQuery (e.g., via $.ajaxSetup or request headers).
+Regarding the scan result:
+For invalid or tampered requests, the application returns an error message within an HTTP 200 OK response.
+This is intentional application behavior for consistent UI handling and does not indicate successful processing.
+No business logic execution or state change occurs when CSRF validation fails.
+Additional safeguards:
+Content Security Policy (CSP) is enabled.
+Session management and input validation follow secure coding practices.
+As confirmed with Veracode, the finding is triggered by response handling (HTTP status code) rather than an actual CSRF vulnerability. Since CSRF protections are properly implemented and enforced, this issue is a false positive.
+If you need, I can:
+Compress this into Veracode character-limit format (~1000 chars)
+Or align it with Spring Security / custom filter implementation wording (if you're using those)
+
+
+
+
+1) CWE-829 – Unrecognized CSP Directive
+Mitigation Comment:
+This is a false positive. The CSP directive require-trusted-types-for 'script' is a valid modern browser security feature used to mitigate DOM-based XSS. In our Java/JSP application, CSP headers are configured server-side and only trusted scripts are allowed.
+This issue was discussed with the Veracode team during an Office Hours call, where it was confirmed that their scanning engine does not yet recognize this newer directive. Based on that guidance, we are submitting this as a false positive mitigation, as it does not introduce any security risk.
+2) CWE-352 – CSRF
+Mitigation Comment:
+This is a false positive. The application implements CSRF protection using dynamic server-generated tokens, which are validated for all state-changing requests. Tokens are included in JSP forms and AJAX requests via jQuery, and invalid or missing tokens are rejected before any processing.
+The finding is triggered because invalid requests return an HTTP 200 response with error content; however, no state change or business logic execution occurs.
+This behavior was discussed with the Veracode team during an Office Hours call, and based on their guidance, this is being submitted as a false positive mitigation since effective CSRF controls are already in place.
