@@ -1,0 +1,16 @@
+@BeforeEach
+public void setup() {
+    constraintValidatorContext = mock(ConstraintValidatorContext.class);
+
+    ConstraintValidatorContext.ConstraintViolationBuilder builder =
+            mock(ConstraintValidatorContext.ConstraintViolationBuilder.class);
+    ConstraintValidatorContext.ConstraintViolationBuilder.NodeBuilderCustomizableContext nodeBuilder =
+            mock(ConstraintValidatorContext.ConstraintViolationBuilder.NodeBuilderCustomizableContext.class);
+
+    when(constraintValidatorContext.buildConstraintViolationWithTemplate(anyString()))
+            .thenReturn(builder);
+    when(builder.addPropertyNode(anyString()))
+            .thenReturn(nodeBuilder);
+    when(nodeBuilder.addConstraintViolation())
+            .thenReturn(constraintValidatorContext);
+}
