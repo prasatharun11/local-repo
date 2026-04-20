@@ -1,0 +1,202 @@
+/*******************************
+ * Utility Functions
+ *******************************/
+function register() {
+  top.location = "/web/publiccontroller?Action=userregistration";
+}
+
+document.getElementById("register_new")
+  ?.addEventListener("click", register);
+
+function readCookie(name) {
+  const matches = document.cookie.match(new RegExp(
+    "(?:^|; )" + name + "=([^;]*)"
+  ));
+  return matches ? decodeURIComponent(matches[1]) : null;
+}
+
+/*******************************
+ * URLs
+ *******************************/
+const nowlogin = window.location.origin + "/web/controller?Action=login";
+const sessionSet = window.location.origin + "/web/controller?Action=irsession";
+
+/*******************************
+ * Set Session Variables
+ *******************************/
+function setSessionVariables(response) {
+  const tokens = response.tokens || response;
+
+  const idToken = tokens.idToken;
+  const accessToken = tokens.accessToken;
+
+  if (idToken) {
+    document.getElementById("user_name").value = idToken.claims.name;
+    document.getElementById("user_email").value = idToken.claims.email;
+  }
+
+  $.ajax({
+    type: "POST",
+    url: sessionSet,
+    data: {
+      userCIAMName: idToken?.claims?.name,
+      userCIAMEmail: idToken?.claims?.email,
+      userCIAMToken: idToken?.claims?.sub,
+      groupsList: idToken?.claims?.groups,
+      CIAMIDToken: idToken?.idToken,
+      CIAMAccessToken: accessToken?.accessToken,
+      employeeNumber: idToken?.claims?.employeeNumber,
+      iRisklegacyemailID: idToken?.claims?.legacyname,
+      userIdToken: idToken?.idToken,
+      claimno: document.getElementById("claimno").value,
+      oneclmno: document.getElementById("oneclmno").value
+    },
+    success: function () {
+      window.location.replace(nowlogin);
+    },
+    error: function (err) {
+      console.error("Session error", err);
+    }
+  });
+}
+
+/*******************************
+ * OKTA CONFIG (UPDATED)
+ *******************************/
+const config = {
+  issuer: document.getElementById("issuer").value,
+  clientId: document.getElementById("iRiskClientID").value,
+  redirectUri: nowlogin,
+
+  scopes: ['openid', 'profile', 'email', 'intellirisk'],
+
+  useInteractionCodeFlow: true,
+  pkce: true,
+
+  tokenManager: {
+    storage: 'sessionStorage'
+  }
+};
+
+/*******************************
+ * INIT AUTH CLIENT
+ *******************************/
+const authClient = new OktaAuth(config);
+
+/*******************************
+ * HANDLE REDIRECT (REQUIRED)
+ *******************************/
+if (authClient.isLoginRedirect()) {
+  authClient.handleLoginRedirect()
+    .then((tokens) => {
+      authClient.tokenManager.setTokens(tokens);
+      setSessionVariables({ tokens });
+    })
+    .catch(err => {
+      console.error("Redirect handling error:", err);
+    });
+}
+
+/*******************************
+ * CHECK SESSION
+ *******************************/
+authClient.session.exists()
+  .then(function (exists) {
+    if (exists) {
+      // User already has session → redirect for tokens
+      authClient.token.getWithRedirect();
+    } else {
+      loginWidget();
+    }
+  });
+
+/*******************************
+ * LOGIN WIDGET
+ *******************************/
+function loginWidget() {
+
+  const signIn = new OktaSignIn({
+    baseUrl: document.getElementById("ciamWidgetURL").value,
+    clientId: config.clientId,
+    redirectUri: config.redirectUri,
+    authClient: authClient,
+    useInteractionCodeFlow: true,
+    scopes: config.scopes,
+
+    i18n: {
+      en: {
+        'primaryauth.title': 'Sign In',
+        'primaryauth.username.placeholder': 'Email Address',
+        'primaryauth.password.placeholder': 'Password',
+        'password.forgot.email.or.username.placeholder': 'Email Address',
+        'needhelp': 'Need help resetting your password?',
+        'signin': 'Login',
+        'errors.E0000004': 'Authentication Failed.',
+        'errors.E0000005': 'Invalid session.',
+        'errors.E0000042': 'Internal error, contact support.',
+        'errors.E0000064': 'Password expired.',
+        'errors.E0000079': 'Authentication failed.',
+        'errors.E0000085': 'User authentication failed',
+        'errors.E0000156': 'User not found.',
+        'errors.E0000155': 'User not active',
+        'errors.E0000199': 'User locked. Contact support.'
+      }
+    },
+
+    helpLinks: {
+      help: 'https://www.aig.com/'
+    },
+
+    features: {
+      smsRecovery: true,
+      callRecovery: true,
+      emailRecovery: true,
+      rememberMe: false,
+      idpDiscovery: true
+    },
+
+    idpDiscovery: {
+      requestContext: document.getElementById("requestContext").value
+    }
+  });
+
+  /*******************************
+   * RENDER WIDGET (UPDATED)
+   *******************************/
+  signIn.showSignInToGetTokens({
+    el: '#okta-login-container'
+  })
+  .then(function (tokens) {
+    authClient.tokenManager.setTokens(tokens);
+    setSessionVariables({ tokens });
+  })
+  .catch(function (err) {
+    console.error("Widget error:", err);
+  });
+}
+
+/*******************************
+ * DOM CUSTOMIZATION (VERIFY!)
+ *******************************/
+$(document).ready(function () {
+
+  $("#okta-login-container").on("click", ".js-help", function () {
+    $("#help-links-container li:nth-child(3)").remove();
+    $("#help-links-container li:nth-child(2)").remove();
+    $("#help-links-container li:nth-child(1) a")
+      .text("Reset password now");
+  });
+
+  $("#okta-login-container").on("click", ".js-forgot-password", function () {
+    $("#irsignindiv").css("display", "none");
+    $(".okta-sign-in.auth-container.main-container")
+      .css("padding-top", "10px");
+  });
+
+  $("#okta-login-container").on("click", ".js-back", function () {
+    $("#irsignindiv").css("display", "block");
+    $(".okta-sign-in.auth-container.main-container")
+      .css("padding-top", "70px");
+  });
+
+});
