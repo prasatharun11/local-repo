@@ -1,0 +1,14 @@
+Subject: UI Sync: XYZ Application Enhancement - "Include policies with no claims"
+Hi Team,
+A call is needed to discuss a UI enhancement for the XYZ application regarding the "Include policies with no claims" feature.
+To clarify the current implementation:
+XYZ Application: This is a sort dropdown (consistent with other sort fields).
+ABC Application: This is a checkbox input.
+Discussion Points:
+Parameter Sequence: For the /getReport and /createScheduleAdv services, we need to ensure the UI sends this value within the sort parameters at the specific position (e.g., 3rd, 4th, or 5th) requested by the service team.
+Code Verification: This logic is already handled in reports like Report Name 1 and Report Name 2. We need to verify if the XYZ sort dropdown implementation correctly follows this pattern to ensure the values are passed in the correct order.
+UI Impact: Confirm if any changes are needed in the XYZ codebase to handle this specific ordering for the backend request.
+Please include the relevant UI developers for XYZ to ensure the implementation is aligned.
+Let us know the availability for a brief sync.
+Best regards,
+[Your Name]
