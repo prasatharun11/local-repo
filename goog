@@ -1,0 +1,40 @@
+<script>
+    if (window.trustedTypes && trustedTypes.createPolicy) {
+        
+        // Create a default policy — this catches ALL unsafe assignments
+        trustedTypes.createPolicy('default', {
+            
+            createScriptURL: function(url) {
+                // Whitelist all Google reCAPTCHA related URLs
+                const allowedDomains = [
+                    'https://www.google.com/recaptcha/',
+                    'https://www.gstatic.com/recaptcha/',
+                    'https://recaptcha.google.com/',
+                    'https://www.google.com/js/'
+                ];
+
+                const isAllowed = allowedDomains.some(domain => 
+                    url.startsWith(domain)
+                );
+
+                if (isAllowed) {
+                    return url; // Allow it
+                }
+
+                console.error('Blocked script URL:', url);
+                throw new Error('Untrusted script URL blocked: ' + url);
+            },
+
+            createHTML: function(html) {
+                return html; // Allow HTML (tighten this in production)
+            },
+
+            createScript: function(script) {
+                return script; // Allow inline scripts
+            }
+        });
+    }
+</script>
+
+<!-- Load reCAPTCHA AFTER the policy is defined -->
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
