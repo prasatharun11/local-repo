@@ -1,0 +1,10 @@
+plugins {
+    id "com.github.ben-manes.versions" version "0.52.0"
+    id "com.autonomousapps.dependency-analysis" version "2.9.0"
+    id "org.owasp.dependencycheck" version "12.1.0"
+}
+
+
+./gradlew dependencyUpdates
+./gradlew buildHealth
+./gradlew dependencyCheckAnalyze
