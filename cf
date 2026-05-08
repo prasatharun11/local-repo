@@ -1,0 +1,83 @@
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class CurrencyFormatter {
+
+    public static String formatValue(String colVal) {
+
+        // Return as-is for null/empty
+        if (colVal == null || colVal.trim().isEmpty()) {
+            return colVal;
+        }
+
+        try {
+
+            String originalValue = colVal.trim();
+
+            // Extract leading or trailing currency symbol/text
+            String prefix = "";
+            String suffix = "";
+
+            // Prefix symbol/text
+            Matcher prefixMatcher =
+                    Pattern.compile("^[^\\d\\-.]+").matcher(originalValue);
+
+            if (prefixMatcher.find()) {
+                prefix = prefixMatcher.group();
+            }
+
+            // Suffix symbol/text
+            Matcher suffixMatcher =
+                    Pattern.compile("[^\\d\\-.]+$").matcher(originalValue);
+
+            if (suffixMatcher.find()) {
+                suffix = suffixMatcher.group();
+            }
+
+            // Keep only numeric chars, decimal and minus
+            String numericValue =
+                    originalValue.replaceAll("[^\\d.\\-]", "");
+
+            // Handle invalid numeric cases
+            if (numericValue.isEmpty()
+                    || numericValue.equals(".")
+                    || numericValue.equals("-")
+                    || numericValue.equals("-.")) {
+
+                return originalValue;
+            }
+
+            BigDecimal bd = new BigDecimal(numericValue);
+
+            // Round to 2 decimal places
+            bd = bd.setScale(2, RoundingMode.HALF_UP);
+
+            DecimalFormat df = new DecimalFormat("#,##0.00");
+
+            String formattedNumber = df.format(bd);
+
+            return prefix + formattedNumber + suffix;
+
+        } catch (Exception e) {
+
+            // Worst case return original value
+            return colVal;
+        }
+    }
+
+    public static void main(String[] args) {
+
+        System.out.println(formatValue("$7818.740000000001"));
+        System.out.println(formatValue("₹7,818.740000000001"));
+        System.out.println(formatValue("7818.740000000001"));
+        System.out.println(formatValue("0"));
+        System.out.println(formatValue(null));
+        System.out.println(formatValue(""));
+        System.out.println(formatValue("ABC"));
+        System.out.println(formatValue("$ABC"));
+        System.out.println(formatValue("7818.74 USD"));
+    }
+}
