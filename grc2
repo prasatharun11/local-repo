@@ -1,0 +1,140 @@
+<head>
+  <script src="https://www.google.com/recaptcha/enterprise.js?render=YOUR_SITE_KEY"></script>
+</head>
+
+<body>
+  <form action="FinalRegistrationServlet" method="POST" id="finalForm">
+    
+    <!-- Hidden fields carrying data from page 1 and page 2 (session or hidden inputs) -->
+    <input type="hidden" name="firstName" value="${sessionScope.firstName}" />
+    <input type="hidden" name="email" value="${sessionScope.email}" />
+    <!-- ...other fields from page 1 & 2... -->
+
+    <!-- Page 3 fields -->
+    <input type="text" name="address" placeholder="Address" />
+    <input type="text" name="city" placeholder="City" />
+
+    <!-- reCAPTCHA token will be injected here -->
+    <input type="hidden" id="recaptchaToken" name="recaptchaToken" value="" />
+
+    <button type="button" onclick="submitWithCaptcha(event)">Complete Registration</button>
+  </form>
+
+  <script>
+    function submitWithCaptcha(e) {
+      e.preventDefault();
+
+      // Execute reCAPTCHA only at the final submission moment
+      grecaptcha.enterprise.ready(async () => {
+        try {
+          const token = await grecaptcha.enterprise.execute('YOUR_SITE_KEY', {action: 'REGISTER'});
+          document.getElementById('recaptchaToken').value = token;
+          document.getElementById('finalForm').submit(); // submits immediately after token generated
+        } catch (err) {
+          console.error('reCAPTCHA error:', err);
+          alert('Security check failed. Please try again.');
+        }
+      });
+    }
+  </script>
+</body>
+
+// Page1Servlet.java
+@WebServlet("/Page1Servlet")
+public class Page1Servlet extends HttpServlet {
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        // Save page 1 data in session
+        HttpSession session = request.getSession();
+        session.setAttribute("firstName", request.getParameter("firstName"));
+        session.setAttribute("lastName", request.getParameter("lastName"));
+        session.setAttribute("email", request.getParameter("email"));
+
+        // Move to page 2
+        response.sendRedirect("page2.jsp");
+    }
+}
+
+// Page2Servlet.java
+@WebServlet("/Page2Servlet")
+public class Page2Servlet extends HttpServlet {
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        // Save page 2 data in session
+        HttpSession session = request.getSession();
+        session.setAttribute("phone", request.getParameter("phone"));
+        session.setAttribute("dob", request.getParameter("dob"));
+
+        // Move to page 3
+        response.sendRedirect("page3.jsp");
+    }
+}
+
+@WebServlet("/FinalRegistrationServlet")
+public class FinalRegistrationServlet extends HttpServlet {
+
+    private static final String PROJECT_ID = "your-gcp-project-id";
+    private static final String SITE_KEY   = "YOUR_SITE_KEY";
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        String recaptchaToken = request.getParameter("recaptchaToken");
+
+        // 1. Validate reCAPTCHA first
+        if (recaptchaToken == null || !validateRecaptchaToken(recaptchaToken, "REGISTER")) {
+            response.sendRedirect("page3.jsp?error=captcha");
+            return;
+        }
+
+        // 2. Retrieve all session data from page 1 & 2
+        HttpSession session = request.getSession();
+        String firstName = (String) session.getAttribute("firstName");
+        String lastName  = (String) session.getAttribute("lastName");
+        String email     = (String) session.getAttribute("email");
+        String phone     = (String) session.getAttribute("phone");
+        String dob       = (String) session.getAttribute("dob");
+
+        // 3. Get page 3 data
+        String address = request.getParameter("address");
+        String city    = request.getParameter("city");
+
+        // 4. Save to DB and clear session
+        // userService.save(...)
+        session.invalidate();
+
+        response.sendRedirect("success.jsp");
+    }
+
+    private boolean validateRecaptchaToken(String token, String actionName) {
+        try (RecaptchaEnterpriseServiceClient client = RecaptchaEnterpriseServiceClient.create()) {
+
+            Event event = Event.newBuilder()
+                    .setSiteKey(SITE_KEY)
+                    .setToken(token)
+                    .build();
+
+            CreateAssessmentRequest assessmentRequest = CreateAssessmentRequest.newBuilder()
+                    .setParent(ProjectName.of(PROJECT_ID).toString())
+                    .setAssessment(Assessment.newBuilder().setEvent(event).build())
+                    .build();
+
+            Assessment assessment = client.createAssessment(assessmentRequest);
+
+            if (!assessment.getTokenProperties().getValid()) return false;
+            if (!assessment.getTokenProperties().getAction().equals(actionName)) return false;
+
+            return assessment.getRiskAnalysis().getScore() >= 0.5;
+
+        } catch (Exception e) {
+            System.err.println("reCAPTCHA error: " + e.getMessage());
+            return false;
+        }
+    }
+}
+
