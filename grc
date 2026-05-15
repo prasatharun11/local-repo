@@ -1,0 +1,140 @@
+import org.json.JSONObject;
+
+import java.io.IOException;
+
+import java.net.URI;
+
+import java.net.URLEncoder;
+
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+import java.nio.charset.StandardCharsets;
+
+import java.time.Duration;
+
+public final class RecaptchaService {
+
+    // Load from ENV or secure config
+    private static final String SECRET_KEY =
+            System.getenv("RECAPTCHA_SECRET");
+
+    private static final String VERIFY_URL =
+            "https://www.google.com/recaptcha/api/siteverify";
+
+    private static final double MIN_SCORE = 0.5;
+
+    private static final HttpClient HTTP_CLIENT =
+            HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build();
+
+    private RecaptchaService() {
+    }
+
+    public static boolean verifyCaptcha(
+            final String token,
+            final String expectedAction)
+            throws IOException, InterruptedException {
+
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+
+        final String requestBody =
+                "secret=" +
+                URLEncoder.encode(
+                        SECRET_KEY,
+                        StandardCharsets.UTF_8)
+                +
+                "&response=" +
+                URLEncoder.encode(
+                        token,
+                        StandardCharsets.UTF_8);
+
+        final HttpRequest request =
+                HttpRequest.newBuilder()
+                        .uri(URI.create(VERIFY_URL))
+                        .timeout(Duration.ofSeconds(5))
+                        .header(
+                                "Content-Type",
+                                "application/x-www-form-urlencoded")
+                        .POST(
+                                HttpRequest.BodyPublishers
+                                        .ofString(requestBody))
+                        .build();
+
+        final HttpResponse<String> response =
+                HTTP_CLIENT.send(
+                        request,
+                        HttpResponse.BodyHandlers.ofString());
+
+        // Validate HTTP status
+        if (response.statusCode() != 200) {
+            return false;
+        }
+
+        final JSONObject json =
+                new JSONObject(response.body());
+
+        // Verify success
+        final boolean success =
+                json.optBoolean("success", false);
+
+        if (!success) {
+            return false;
+        }
+
+        // Verify action
+        final String action =
+                json.optString("action", "");
+
+        if (!expectedAction.equals(action)) {
+            return false;
+        }
+
+        // Verify hostname
+        final String hostname =
+                json.optString("hostname", "");
+
+        if (!"yourdomain.com".equalsIgnoreCase(hostname)) {
+            return false;
+        }
+
+        // Verify score
+        final double score =
+                json.optDouble("score", 0.0);
+
+        return score >= MIN_SCORE;
+    }
+}
+
+
+String token =
+        request.getParameter("recaptchaToken");
+
+boolean captchaValid;
+
+try {
+
+    captchaValid =
+            RecaptchaService.verifyCaptcha(
+                    token,
+                    "REGISTER"
+            );
+
+} catch (Exception ex) {
+
+    captchaValid = false;
+}
+
+if (!captchaValid) {
+
+    response.sendError(
+            HttpServletResponse.SC_FORBIDDEN,
+            "Captcha validation failed"
+    );
+
+    return;
+}
