@@ -1,0 +1,21 @@
+(function() {
+    if (typeof grecaptcha === 'undefined') {
+        console.log("reCAPTCHA script is not loaded on this page yet.");
+        return;
+    }
+    
+    // Check the script source attributes on the page as well
+    const scripts = Array.from(document.querySelectorAll('script[src]')).map(s => s.src);
+    const isEnterpriseScript = scripts.some(src => src.includes('recaptcha/enterprise.js'));
+
+    console.log("--- reCAPTCHA Detection ---");
+    if (isEnterpriseScript) {
+        console.log("Type: reCAPTCHA Enterprise (Detected via script URL)");
+    } else if (grecaptcha.execute && !grecaptcha.render) {
+        console.log("Type: reCAPTCHA v3 (Programmatic execution optimized)");
+    } else if (grecaptcha.render || grecaptcha.getResponse) {
+        console.log("Type: reCAPTCHA v2 (Checkbox or Invisible Widget optimized)");
+    } else {
+        console.log("Type: Standard reCAPTCHA (Generic global object found)");
+    }
+})();
