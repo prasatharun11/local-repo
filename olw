@@ -1,0 +1,64 @@
+signIn.on('afterError', function (context, error) {
+
+    console.log(error);
+
+    const msg = (error.message || '').toLowerCase();
+
+    if (
+        error.name === 'OAuthError' &&
+        msg.includes('not assigned')
+    ) {
+
+        // Find username field
+        const username =
+            document.querySelector('input[name="identifier"]') ||
+            document.querySelector('#okta-signin-username');
+
+        // Find password field
+        const password =
+            document.querySelector('input[type="password"]');
+
+        // Find submit button
+        const submit =
+            document.querySelector('input[type="submit"]');
+
+        if (username) {
+            username.disabled = true;
+        }
+
+        if (password) {
+            password.disabled = true;
+        }
+
+        if (submit) {
+            submit.disabled = true;
+        }
+
+        // Create your own custom error container
+        let customError =
+            document.getElementById('custom-assignment-error');
+
+        if (!customError) {
+
+            customError = document.createElement('div');
+
+            customError.id = 'custom-assignment-error';
+
+            customError.style.color = 'red';
+            customError.style.marginBottom = '10px';
+            customError.style.fontWeight = 'bold';
+
+            // Insert above form
+            const form =
+                document.querySelector('.o-form') ||
+                document.querySelector('form');
+
+            if (form && form.parentNode) {
+                form.parentNode.insertBefore(customError, form);
+            }
+        }
+
+        customError.innerText =
+            'You are not assigned to this application. Contact administrator.';
+    }
+});
