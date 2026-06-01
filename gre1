@@ -1,0 +1,79 @@
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.api.gax.core.FixedCredentialsProvider;
+import com.google.cloud.recaptchaenterprise.v1.RecaptchaEnterpriseServiceClient;
+import com.google.cloud.recaptchaenterprise.v1.RecaptchaEnterpriseServiceSettings;
+import com.google.recaptchaenterprise.v1.Assessment;
+import com.google.recaptchaenterprise.v1.CreateAssessmentRequest;
+import com.google.recaptchaenterprise.v1.Event;
+import com.google.recaptchaenterprise.v1.ProjectName;
+import java.io.FileInputStream;
+
+public class RecaptchaValidator {
+
+    private static final String PROJECT_ID   = "my-company-123456";
+    private static final String SITE_KEY     = "xxxxLhtJw75jdVkijsKOILKLsmy_A1-";
+    private static final String CREDENTIALS  = "C:/path/to/service-account.json";
+    private static final double THRESHOLD    = 0.5;
+
+    public boolean validateRecaptchaToken(String token, String actionName) {
+        try {
+            // Load credentials from JSON file
+            GoogleCredentials credentials = GoogleCredentials
+                    .fromStream(new FileInputStream(CREDENTIALS))
+                    .createScoped("https://www.googleapis.com/auth/cloud-platform");
+
+            // Build settings with credentials
+            RecaptchaEnterpriseServiceSettings settings =
+                RecaptchaEnterpriseServiceSettings.newBuilder()
+                    .setCredentialsProvider(
+                        FixedCredentialsProvider.create(credentials)
+                    )
+                    .build();
+
+            try (RecaptchaEnterpriseServiceClient client =
+                        RecaptchaEnterpriseServiceClient.create(settings)) {
+
+                Event event = Event.newBuilder()
+                        .setSiteKey(SITE_KEY)
+                        .setToken(token)
+                        .build();
+
+                CreateAssessmentRequest assessmentRequest =
+                    CreateAssessmentRequest.newBuilder()
+                        .setParent(ProjectName.of(PROJECT_ID).toString())
+                        .setAssessment(
+                            Assessment.newBuilder()
+                                .setEvent(event)
+                                .build()
+                        )
+                        .build();
+
+                Assessment assessment = client.createAssessment(assessmentRequest);
+
+                // 1. Check token valid
+                if (!assessment.getTokenProperties().getValid()) {
+                    System.err.println("Invalid token: "
+                        + assessment.getTokenProperties()
+                                    .getInvalidReason().name());
+                    return false;
+                }
+
+                // 2. Check action match
+                if (!assessment.getTokenProperties()
+                               .getAction().equals(actionName)) {
+                    System.err.println("Action mismatch!");
+                    return false;
+                }
+
+                // 3. Check score
+                float score = assessment.getRiskAnalysis().getScore();
+                System.out.println("reCAPTCHA Score: " + score);
+                return score >= THRESHOLD;
+            }
+
+        } catch (Exception e) {
+            System.err.println("reCAPTCHA validation error: " + e.getMessage());
+            return false;
+        }
+    }
+}
