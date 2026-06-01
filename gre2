@@ -1,0 +1,83 @@
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.recaptchaenterprise.v1.RecaptchaEnterpriseServiceClient;
+import com.google.cloud.recaptchaenterprise.v1.RecaptchaEnterpriseServiceSettings;
+import com.google.recaptchaenterprise.v1.Assessment;
+import com.google.recaptchaenterprise.v1.CreateAssessmentRequest;
+import com.google.recaptchaenterprise.v1.Event;
+import com.google.recaptchaenterprise.v1.ProjectName;
+import java.io.FileInputStream;
+
+public class RecaptchaVerifier {
+
+    // These should ideally come from your application.properties / environment variables
+    private static final String PROJECT_ID = "my-company-123456"; 
+    private static final String SITE_KEY = "YOUR_FRONTEND_SITE_KEY"; 
+
+    public static boolean createAssessment(String token, String recaptchaAction) {
+        
+        // Path to the JSON file provided by DevOps
+        String credentialPath = "/path/to/your/recaptcha-key.json"; 
+
+        try (FileInputStream credentialsStream = new FileInputStream(credentialPath)) {
+            
+            // 1. Authenticate using the Service Account JSON
+            GoogleCredentials credentials = GoogleCredentials.fromStream(credentialsStream);
+            RecaptchaEnterpriseServiceSettings settings = RecaptchaEnterpriseServiceSettings.newBuilder()
+                    .setCredentialsProvider(() -> credentials)
+                    .build();
+
+            // 2. Initialize the reCAPTCHA client
+            try (RecaptchaEnterpriseServiceClient client = RecaptchaEnterpriseServiceClient.create(settings)) {
+
+                // 3. Set up the event details
+                Event event = Event.newBuilder()
+                        .setToken(token)
+                        .setSiteKey(SITE_KEY)
+                        .build();
+
+                // 4. Create the assessment request
+                CreateAssessmentRequest createAssessmentRequest = CreateAssessmentRequest.newBuilder()
+                        .setParent(ProjectName.of(PROJECT_ID).toString())
+                        .setAssessment(Assessment.newBuilder().setEvent(event).build())
+                        .build();
+
+                Assessment response = client.createAssessment(createAssessmentRequest);
+
+                // 5. Validate the token and action
+                if (!response.getTokenProperties().getValid()) {
+                    System.out.println("The token is invalid! Reason: " + response.getTokenProperties().getInvalidReason().name());
+                    return false;
+                }
+
+                // Check if the expected action matches the frontend action (prevents token reuse attacks)
+                if (!response.getTokenProperties().getAction().equals(recaptchaAction)) {
+                    System.out.println("Action mismatch! Expected: " + recaptchaAction + ", Got: " + response.getTokenProperties().getAction());
+                    return false;
+                }
+
+                // 6. Get the risk score (0.0 = Bot, 1.0 = Human)
+                float score = response.getRiskAnalysis().getScore();
+                System.out.println("reCAPTCHA Risk Score: " + score);
+
+                // Define your threshold (0.5 is usually the standard sweet spot)
+                return score >= 0.5;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Handle connection/API exceptions gracefully based on your business logic
+            return false;
+        }
+    }
+}
+
+
+dependencies {
+    // Import the BOM platform
+    implementation platform('com.google.cloud:libraries-bom:26.80.0')
+
+    // Declare dependencies without hardcoding versions
+    implementation 'com.google.cloud:google-cloud-recaptchaenterprise'
+    implementation 'com.google.auth:google-auth-library-oauth2-http'
+}
+
+
