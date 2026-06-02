@@ -1,0 +1,113 @@
+package com.yourcompany.service; // Adjust package name as needed
+
+import com.google.api.client.json.GenericJson;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.recaptchaenterprise.v1.RecaptchaEnterpriseServiceClient;
+import com.google.cloud.recaptchaenterprise.v1.RecaptchaEnterpriseServiceSettings;
+import com.google.recaptchaenterprise.v1.Assessment;
+import com.google.recaptchaenterprise.v1.CreateAssessmentRequest;
+import com.google.recaptchaenterprise.v1.Event;
+import com.google.recaptchaenterprise.v1.ProjectName;
+
+import java.io.ByteArrayInputStream;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Properties;
+
+public class RecaptchaService {
+    
+    // In-memory variables loaded once at startup and reused forever
+    private final String siteKey;
+    private final String projectId;
+    private final GoogleCredentials credentials;
+
+    /**
+     * Constructor: Connects to Vault exactly once, initializes everything, 
+     * and discards the Vault connection data.
+     */
+    public RecaptchaService(ConfigProvider iconf) {
+        try {
+            // 1. Hit Vault exactly once to pull the secret map
+            Properties valut_prop = iconf.getProperties("Vault_");
+            VaultManager manager = new VaultManager();
+            Map<String, String> vaultData = manager.getAllSecrets(valut_prop);
+
+            if (vaultData == null) {
+                throw new IllegalStateException("Vault returned an empty data map.");
+            }
+
+            // 2. Extract separate values from Vault map
+            String googleJson = vaultData.get("Vault_RECAPTCHA_JSON"); 
+            this.siteKey = vaultData.get("Vault_RECAPTCHA_SITEKEY");
+
+            if (googleJson == null || this.siteKey == null) {
+                throw new IllegalArgumentException("Missing reCAPTCHA JSON or Site Key configurations inside Vault.");
+            }
+
+            // 3. Convert JSON text stream into GoogleCredentials
+            try (ByteArrayInputStream stream = new ByteArrayInputStream(googleJson.getBytes(StandardCharsets.UTF_8))) {
+                this.credentials = GoogleCredentials.fromStream(stream);
+            }
+
+            // 4. Parse the project_id out of the JSON string dynamically
+            GsonFactory jsonFactory = GsonFactory.getDefaultInstance();
+            GenericJson parsedJson = jsonFactory.createJsonParser(new StringReader(googleJson)).parse(GenericJson.class);
+            this.projectId = (String) parsedJson.get("project_id");
+
+            if (this.projectId == null || this.projectId.trim().isEmpty()) {
+                throw new IllegalArgumentException("Could not extract 'project_id' from the provided Vault service account JSON.");
+            }
+
+            System.out.println("RecaptchaService successfully configured. Project ID: " + this.projectId);
+
+        } catch (Exception e) {
+            throw new RuntimeException("CRITICAL: Failed to initialize RecaptchaService from Vault: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Verifies the frontend token against Google Cloud reCAPTCHA Enterprise
+     */
+    public boolean verifyToken(String token, String expectedAction) {
+        try {
+            // Uses the already cached GoogleCredentials structure without hitting Vault
+            RecaptchaEnterpriseServiceSettings settings = RecaptchaEnterpriseServiceSettings.newBuilder()
+                    .setCredentialsProvider(() -> this.credentials)
+                    .build();
+
+            try (RecaptchaEnterpriseServiceClient client = RecaptchaEnterpriseServiceClient.create(settings)) {
+                
+                Event event = Event.newBuilder()
+                        .setToken(token)
+                        .setSiteKey(this.siteKey) // Uses the cached site key
+                        .build();
+
+                CreateAssessmentRequest request = CreateAssessmentRequest.newBuilder()
+                        .setParent(ProjectName.of(this.projectId).toString()) // Uses the dynamic project ID extracted from JSON
+                        .setAssessment(Assessment.newBuilder().setEvent(event).build())
+                        .build();
+
+                Assessment response = client.createAssessment(request);
+
+                // Token validation check
+                if (!response.getTokenProperties().getValid()) {
+                    System.out.println("reCAPTCHA Invalid Token! Reason: " + response.getTokenProperties().getInvalidReason());
+                    return false;
+                }
+
+                // Action validation check
+                if (!response.getTokenProperties().getAction().equals(expectedAction)) {
+                    System.out.println("reCAPTCHA Action Mismatch! Expected: " + expectedAction + ", Got: " + response.getTokenProperties().getAction());
+                    return false;
+                }
+
+                return response.getRiskAnalysis().getScore() >= 0.5;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+}
