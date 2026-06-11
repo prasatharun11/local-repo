@@ -1,0 +1,64 @@
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+import java.util.regex.Pattern;
+
+public class DateProcessor {
+
+    // Existing patterns
+    private static final Pattern DATE_PATTERN = Pattern.compile("^(\\d{2,4})-(\\d{1,2})-(\\d{1,2})$");
+    private static final Pattern DATE_PATTERN_2 = Pattern.compile("^(\\d{1,2})/(\\d{1,2})/(\\d{2,4})$");
+    
+    // New pattern for ISO-8601 UTC strings (e.g., 2026-06-11T00:00:00Z)
+    private static final Pattern DATE_ISO_Z_PATTERN = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$");
+
+    // Existing formatters (Assuming these are defined somewhere in your original code)
+    private static final DateTimeFormatter DATE_SOURCE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("MM/dd/yyyy");
+
+    public void processCellDate(String text, anywheresoftware.b4a.objects.streams.File.Cell excelCell, Logger logger) {
+        
+        if (isDate(text)) {
+            try {
+                LocalDate date = LocalDate.parse(text, DATE_SOURCE_FORMAT);
+                excelCell.setCellValue(Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+            } catch (Exception e) {
+                logger.fatal(e.getMessage());
+            }
+        } 
+        else if (isDateFormat(text)) {
+            try {
+                LocalDate date = LocalDate.parse(text, DATE_FORMAT);
+                excelCell.setCellValue(Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+            } catch (Exception e) {
+                logger.fatal(e.getMessage());
+            }
+        } 
+        // New logic block for yyyy-MM-ddTHH:mm:ssZ
+        else if (isIsoZDate(text)) {
+            try {
+                // Instant directly parses UTC string ('Z') without needing ZoneId conversions
+                Instant instant = Instant.parse(text);
+                excelCell.setCellValue(Date.from(instant));
+            } catch (Exception e) {
+                logger.fatal(e.getMessage());
+            }
+        }
+    }
+
+    // Existing helper methods
+    public static boolean isDate(String text) {
+        return DATE_PATTERN.matcher(text).matches();
+    }
+
+    public static boolean isDateFormat(String text) {
+        return DATE_PATTERN_2.matcher(text).matches();
+    }
+
+    // New helper method
+    public static boolean isIsoZDate(String text) {
+        return DATE_ISO_Z_PATTERN.matcher(text).matches();
+    }
+}
