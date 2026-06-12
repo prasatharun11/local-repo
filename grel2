@@ -1,0 +1,11 @@
+Justification Summary:
+The flagged string is a public client-side identifier, not a private credential. It is exposed to the public internet by design and carries zero security risk.
+Detailed Technical Explanation:
+1. Architectural Role (Public Identifier):
+The string flagged by the scanner is a Google reCAPTCHA Enterprise Site Key. Per Google Cloud’s official security architecture, this 40-character string is a client-side public identifier. It is a mandatory requirement to embed this key directly into our frontend user interface code so that the browser can communicate with Google's telemetry servers to evaluate user interaction risk.
+2. Mechanism of Protection (Domain Restriction):
+This key cannot be weaponized if exposed. In our Google Cloud Console, this specific Site Key is explicitly restricted to our authorized domains (e.g., *.yourcompany.com). If an attacker copies this key and attempts to use it on an unauthorized domain or via an automated script, Google's API will immediately reject the traffic.
+3. Absence of Backend Secrets:
+Unlike legacy reCAPTCHA versions, reCAPTCHA Enterprise does not utilize a backend static "Secret Key" string. Instead, our backend verification relies strictly on GCP IAM (Identity and Access Management) Service Accounts configured directly on our hosting infrastructure. The exposed key holds zero permissions to read data, modify configurations, or bypass authentication.
+Conclusion:
+Because this key is exposed to the public internet by design on our live production website via the page source, its presence in a Git commit does not constitute a data leak or a security vulnerability. Requesting this alert be marked as a False Positive / Whitelisted.
