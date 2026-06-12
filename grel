@@ -1,0 +1,7 @@
+The asset flagged by the scanner is a Google reCAPTCHA Enterprise Site Key (a 40-character string). 
+  
+Per Google Cloud Enterprise security architecture, this string is a client-side public identifier required to be embedded in our application's frontend layout to initialize the risk telemetry engine. It is exposed to the public internet by design.
+Under reCAPTCHA Enterprise, backend validation does not rely on a secret string; instead, it is secured entirely via GCP IAM roles / Service Account credentials configured on our hosting infrastructure. The exposed key carries zero credential risk, can generate no cost or unauthorized access, and cannot be used maliciously. Requesting closure of this alert.
+
+
+https://docs.cloud.google.com/recaptcha/docs/keys#:~:text=On%20this%20page-,What's%20next,WAF%20layer%20to%20integrate%20reCAPTCHA.
