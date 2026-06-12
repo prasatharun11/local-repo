@@ -1,0 +1,16 @@
+Subject: False Positive Closure Request: Google reCAPTCHA Enterprise Site Key (REQ 54946)
+Team,
+I have raised an official AppSec assessment request (REQ 54946) regarding three alerts flagged by Legit Security following a recent commit. We have reviewed the configuration and determined that these findings are False Positives.
+Please review the details below to whitelist or close these issues:
+Affected Legit Issue URLs:
+[Insert Legit Link #1 Here]
+[Insert Legit Link #2 Here]
+[Insert Legit Link #3 Here]
+Technical Justification:
+Public Identifier by Design: The string flagged by Legit is a Google reCAPTCHA Enterprise Site Key. Per Google Cloud's security architecture, this key is a public, client-side resource that must be embedded directly in our frontend UI layout so the browser can initialize risk telemetry. It is fully visible to the public internet on our live site via "View Source" by design.
+Domain Locked: This key is strictly restricted within our Google Cloud Console to run only on our authorized organizational domains. If an attacker extracts this key, Google's API will immediately reject any traffic originating from an unauthorized domain or script.
+No Backend Privileges: Under reCAPTCHA Enterprise, backend verification does not use static string secrets. Instead, authentication is handled securely via GCP IAM roles / Service Account credentials native to our infrastructure. The exposed key holds zero access privileges and cannot be used to bypass security controls.
+Because this asset is intentionally public and carries no risk of exploitation, please mark these 3 alerts as False Positive and close them out against REQ 54946.
+Thank you,
+[Your Name]
+[Your Title / Team]
