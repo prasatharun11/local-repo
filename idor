@@ -1,0 +1,18 @@
+Hi Team,
+
+Thank you for reporting this finding.
+
+We have reviewed the reported scenario. Currently, during Loss Run report creation, the application relies on the Policy Search functionality to display only the policies that the authenticated user is authorized to access. Under the normal application flow, users can only select from these authorized policies.
+
+However, the reported scenario bypasses the UI by directly manipulating the report creation request and submitting a hardcoded Policy ID. Since the report creation endpoint currently does not perform server-side authorization validation on the submitted Policy ID, this results in an IDOR vulnerability.
+
+To address this, we need to implement server-side authorization checks during report submission to validate that the requesting user has access to the submitted Policy ID before processing the request. If the user is not authorized, the request will be rejected.
+
+Additionally, we plan to design a common authorization validation mechanism that can be reused across all report creation endpoints where resource identifiers are submitted directly, such as Policy, Account, Client, Submission Number, and other similar entities. This will ensure consistent authorization enforcement and help prevent similar IDOR issues across the application.
+
+We also reviewed the secondary finding regarding the receiver email address. Currently, the receiver email address can be manipulated in the report creation request. As part of the remediation, we plan to enforce validation to ensure that only application-authorized users can be specified as report recipients. This will prevent arbitrary or unauthorized email addresses from being used for report distribution.
+
+We will review the implementation approach and assess the feasibility with the backend database team, as the solution may require backend changes. Based on the outcome of this assessment, we will finalize the plan of action and share the estimated timeline (ETA) in this same email thread.
+
+Regards,
+[Your Name]
