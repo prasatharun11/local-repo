@@ -1,0 +1,16 @@
+Subject: Update – File Download Handling from GDMS Server
+Hi [Manager],
+Wanted to give you a status update on the GDMS file download integration.
+How it works:
+We send a document type request to the GDMS endpoint and receive the matching document(s) back. The response can be any file type — we determine the content type server-side and stream the file to the browser via a servlet response, setting Content-Type and Content-Disposition: attachment headers.
+GDMS Endpoint:
+[insert GDMS endpoint URL here]
+File types currently handled:
+GIF, JPEG/JPG, HTML, TXT, PDF, TIF/TIFF, AFP, MDA, RTF, ZIP, BMP, MSG, EML, DOC, DOCX, DOTX, PPT, PPTX, XLS, XLSX, MP3, MP4 (any unmapped type defaults to text/html).
+Files opened directly by Chrome/Edge instead of downloading:
+Even though we set Content-Disposition: attachment, some browsers still render certain types inline (e.g., PDF, and in some cases images like JPEG/GIF/BMP and plain text/HTML) rather than prompting a download. [Recommend confirming the exact list you've observed in testing — I don't have direct visibility into this part, only the code logic.]
+Business classification codes used:
+We use the following classifications when sending requests: PNC, WC, WSWC — [insert brief description of what each represents/maps to].
+Happy to walk through this in more detail if useful.
+Thanks,
+[Your name]
