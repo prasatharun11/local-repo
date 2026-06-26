@@ -1,0 +1,5 @@
+How it works:
+The download process happens in two steps:
+First request (search): We pass the document type and a time range to GDMS to search for matching documents. The response returns the document details — including cmDocId, business classification (PNC, WC, WSWC), vendor ID, and file type — for each matching document.
+Second request (retrieve URL): Using the cmDocId, business classification, and vendor ID from the first response, we make a second request to GDMS, which returns the S3 bucket URL for the document.
+We then validate the S3 URL and open a stream from it to read the file content. The file type from the first response is used to determine the correct Content-Type for the response. The servlet streams the file bytes to the browser via a buffered input/output stream, setting Content-Type and Content-Disposition: attachment headers accordingly.
