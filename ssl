@@ -1,0 +1,43 @@
+import java.io.FileInputStream;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.util.Collections;
+
+public class TrustStoreInfo {
+
+    public static void printTrustStoreDetails() {
+        try {
+            String trustStore = System.getProperty("javax.net.ssl.trustStore");
+            String trustStoreType = System.getProperty("javax.net.ssl.trustStoreType");
+
+            System.out.println("TrustStore Path : " + trustStore);
+            System.out.println("TrustStore Type : "
+                    + (trustStoreType != null ? trustStoreType : KeyStore.getDefaultType()));
+
+            if (trustStore == null || trustStore.isBlank()) {
+                System.out.println("No JVM trustStore configured.");
+                return;
+            }
+
+            KeyStore ks = KeyStore.getInstance(
+                    trustStoreType != null ? trustStoreType : KeyStore.getDefaultType());
+
+            // Reads the truststore using the configured password, but never logs it.
+            ks.load(
+                new FileInputStream(trustStore),
+                System.getProperty("javax.net.ssl.trustStorePassword") != null
+                        ? System.getProperty("javax.net.ssl.trustStorePassword").toCharArray()
+                        : null);
+
+            System.out.println("\nCertificate Aliases:");
+            for (String alias : Collections.list(ks.aliases())) {
+                Certificate cert = ks.getCertificate(alias);
+                System.out.println("Alias : " + alias +
+                        ", Type : " + (cert != null ? cert.getType() : "Unknown"));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
