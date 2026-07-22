@@ -1,0 +1,7 @@
+Hi Team,
+
+This was an entirely new scenario, so we had not configured any specific Splunk alert for this condition earlier.
+
+This is not expected to be a recurring issue unless there is a change to the Okta issuer URL in the production environment. In such a case, the Okta team would notify all consuming applications in advance, allowing us to update the configuration accordingly.
+
+Going forward, if there is an operational requirement to monitor this scenario through Splunk alerts, we can evaluate and configure an appropriate alert.
