@@ -1,0 +1,7 @@
+Subject: Action Required: Syncing Admin Roles for Non-Prod Environments (Bug Bounty Fix)
+​Hi Team,
+​As part of our ongoing bug bounty program remediation, we recently implemented new authorization checks in the mainframe stored procedure. During this process, we identified that several admin IDs used in non-prod environments are not properly configured in the database, where they are incorrectly listed as brokers instead of internal/admin privileged users (employee indicator).
+​This misconfiguration can lead to authorization failures during report creation and other restricted actions.
+​To resolve this, please provide the list of all internal/admin privileged user IDs for the NAM region across all non-prod environments (Dev, Dev2, QA, QA2, UAT, UAT2, and any additional non-prod regions). Once identified, we will need to ensure their user type is properly updated to reflect their admin status.
+​Please let us know once this list can be shared or if you have any questions.
+​Best,
