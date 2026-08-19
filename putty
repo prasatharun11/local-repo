@@ -1,0 +1,6 @@
+java -cp vault-java-driver-5.1.0.jar:. VaultReader \
+"https://vault.company.com" \
+"ROLE_ID" \
+"SECRET_ID" \
+"secret/myapp/prod" \
+"password"
