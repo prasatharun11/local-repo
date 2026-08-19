@@ -1,0 +1,63 @@
+import com.bettercloud.vault.Vault;
+import com.bettercloud.vault.VaultConfig;
+import com.bettercloud.vault.response.AuthResponse;
+import com.bettercloud.vault.response.LogicalResponse;
+
+import java.util.Map;
+
+public class VaultReader {
+
+    public static void main(String[] args) throws Exception {
+
+        if (args.length != 5) {
+            System.out.println(
+                "Usage: java -cp vault-java-driver-5.1.0.jar:. VaultReader " +
+                "<vault-url> <role-id> <secret-id> <secret-path> <secret-key>"
+            );
+            System.exit(1);
+        }
+
+        String vaultUrl = args[0];
+        String roleId = args[1];
+        String secretId = args[2];
+        String secretPath = args[3];
+        String secretKey = args[4];
+
+        VaultConfig config = new VaultConfig()
+                .address(vaultUrl)
+                .build();
+
+        Vault vault = new Vault(config);
+
+        // AppRole login
+        AuthResponse authResponse = vault.auth()
+                .loginByAppRole(roleId, secretId);
+
+        String token = authResponse.getAuthClientToken();
+
+        // Create authenticated Vault client
+        vault = new Vault(
+                new VaultConfig()
+                        .address(vaultUrl)
+                        .token(token)
+                        .build()
+        );
+
+        LogicalResponse response = vault.logical().read(secretPath);
+
+        if (response.getRestResponse().getStatus() != 200) {
+            System.err.println("Vault returned HTTP status: "
+                    + response.getRestResponse().getStatus());
+            System.exit(2);
+        }
+
+        Map<String, String> data = response.getData();
+
+        if (!data.containsKey(secretKey)) {
+            System.err.println("Key not found: " + secretKey);
+            System.exit(3);
+        }
+
+        System.out.println(data.get(secretKey));
+    }
+}
