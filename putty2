@@ -1,0 +1,112 @@
+import com.bettercloud.vault.Vault;
+import com.bettercloud.vault.VaultConfig;
+import com.bettercloud.vault.response.AuthResponse;
+import com.bettercloud.vault.response.LogicalResponse;
+
+import java.util.Map;
+
+public class VaultReader {
+
+    public static void main(String[] args) {
+
+        if (args.length != 6) {
+            System.out.println(
+                "Usage: java -cp vault-java-driver-5.1.0.jar:. VaultReader " +
+                "<vault-url> <app-role> <role-id> <secret-id> <path> <key>"
+            );
+            System.exit(1);
+        }
+
+        String vaultUrl = args[0];
+        String appRole = args[1];
+        String roleId = args[2];
+        String secretId = args[3];
+        String path = args[4];
+        String key = args[5];
+
+        try {
+
+            /*
+             * Step 1: Create Vault configuration
+             */
+            VaultConfig config = new VaultConfig()
+                    .address(vaultUrl)
+                    .engineVersion(1)
+                    .build();
+
+            /*
+             * Step 2: Create unauthenticated Vault client
+             */
+            Vault vault = new Vault(config);
+
+            /*
+             * Step 3: Authenticate using AppRole
+             *
+             * Same approach as your existing working code:
+             *
+             * loginByAppRole(APP_ROLE, roleId, secretId)
+             */
+            AuthResponse response = vault.auth()
+                    .loginByAppRole(appRole, roleId, secretId);
+
+            String token = response.getAuthClientToken();
+
+            if (token == null || token.isEmpty()) {
+                System.err.println("Failed to obtain Vault token");
+                System.exit(2);
+            }
+
+            /*
+             * Step 4: Create authenticated client
+             */
+            Vault authenticatedVault = new Vault(
+                    new VaultConfig()
+                            .address(vaultUrl)
+                            .token(token)
+                            .engineVersion(1)
+                            .build()
+            );
+
+            /*
+             * Step 5: Read secret
+             */
+            LogicalResponse logicalResponse =
+                    authenticatedVault.logical().read(path);
+
+            int status = logicalResponse.getRestResponse().getStatus();
+
+            if (status != 200) {
+                System.err.println("Vault returned HTTP status: " + status);
+                System.err.println(
+                        "Response: " +
+                        logicalResponse.getRestResponse().getBody()
+                );
+                System.exit(3);
+            }
+
+            Map<String, String> secrets = logicalResponse.getData();
+
+            if (secrets == null || secrets.isEmpty()) {
+                System.err.println("No secrets found at path: " + path);
+                System.exit(4);
+            }
+
+            if (!secrets.containsKey(key)) {
+                System.err.println("Key not found: " + key);
+                System.err.println("Available keys: " + secrets.keySet());
+                System.exit(5);
+            }
+
+            /*
+             * Print only the requested value
+             */
+            System.out.println(secrets.get(key));
+
+        } catch (Exception e) {
+            System.err.println("Vault operation failed: "
+                    + e.getMessage());
+            e.printStackTrace();
+            System.exit(6);
+        }
+    }
+}
