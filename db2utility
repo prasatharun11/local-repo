@@ -1,0 +1,93 @@
+import java.util.Scanner;
+
+public class Db2QueryGenerator {
+
+    private static final int BATCH_SIZE = 600000;
+
+    public static void main(String[] args) {
+
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.print("Enter table name: ");
+        String tableName = scanner.nextLine().trim();
+
+        System.out.print("Enter column name: ");
+        String columnName = scanner.nextLine().trim();
+
+        System.out.print("Enter count of rows (press Enter if unknown): ");
+        String countInput = scanner.nextLine().trim();
+
+        long rowCount;
+
+        if (countInput.isEmpty()) {
+            rowCount = 0;
+        } else {
+            rowCount = Long.parseLong(countInput);
+        }
+
+        System.out.println();
+        System.out.println("==============================================");
+        System.out.println("Generated Queries");
+        System.out.println("==============================================");
+
+        /*
+         * Query to find the number of distinct values
+         * containing characters other than A-Z, a-z and 0-9.
+         */
+        String countQuery =
+                "SELECT COUNT(DISTINCT " + columnName + ") " +
+                "FROM " + tableName + " " +
+                "WHERE TRANSLATE(" + columnName + ", '', " +
+                "'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') <> ''";
+
+        System.out.println();
+        System.out.println("-- 1. Count distinct values containing special characters");
+        System.out.println(countQuery + ";");
+
+        /*
+         * If row count was not provided, we cannot generate
+         * the exact number of export queries.
+         */
+        if (rowCount <= 0) {
+            System.out.println();
+            System.out.println("-- Enter the row count and run the program again");
+            System.out.println("-- to generate the export queries.");
+            return;
+        }
+
+        long numberOfQueries =
+                (rowCount + BATCH_SIZE - 1) / BATCH_SIZE;
+
+        System.out.println();
+        System.out.println("-- Total rows : " + rowCount);
+        System.out.println("-- Batch size : " + BATCH_SIZE);
+        System.out.println("-- Number of export queries : " + numberOfQueries);
+
+        /*
+         * Generate export queries.
+         */
+        for (int i = 0; i < numberOfQueries; i++) {
+
+            long offset = (long) i * BATCH_SIZE;
+
+            System.out.println();
+            System.out.println("-- ==========================================");
+            System.out.println("-- Export batch " + (i + 1));
+            System.out.println("-- OFFSET = " + offset);
+            System.out.println("-- ==========================================");
+
+            String exportQuery =
+                    "SELECT " + columnName +
+                    " FROM " + tableName +
+                    " WHERE TRANSLATE(" + columnName + ", '', " +
+                    "'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') <> ''" +
+                    " ORDER BY " + columnName +
+                    " OFFSET " + offset +
+                    " ROWS FETCH FIRST " + BATCH_SIZE + " ROWS ONLY";
+
+            System.out.println(exportQuery + ";");
+        }
+
+        scanner.close();
+    }
+}
