@@ -1,0 +1,148 @@
+import java.util.Scanner;
+
+public class Db2QueryGenerator {
+
+    private static final long BATCH_SIZE = 600000;
+
+    public static void main(String[] args) {
+
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.print("Enter table name: ");
+        String tableName = scanner.nextLine().trim();
+
+        System.out.print("Enter column name: ");
+        String columnName = scanner.nextLine().trim();
+
+        System.out.print("Enter count of rows (press Enter if unknown): ");
+        String countInput = scanner.nextLine().trim();
+
+        long rowCount = 0;
+
+        if (!countInput.isEmpty()) {
+            rowCount = Long.parseLong(countInput);
+        }
+
+        /*
+         * Same filtering condition will be used in BOTH
+         * count query and export queries.
+         */
+        String filterCondition =
+                "TRANSLATE(" + columnName + ", '', " +
+                "'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') <> ''";
+
+        /*
+         * IMPORTANT:
+         *
+         * Count the rows AFTER DISTINCT.
+         *
+         * This guarantees that the count matches the export dataset.
+         */
+        String countQuery =
+                "SELECT COUNT(*) " +
+                "FROM (" +
+                " SELECT DISTINCT " + columnName +
+                " FROM " + tableName +
+                " WHERE " + filterCondition +
+                ") D";
+
+        System.out.println();
+        System.out.println("==================================================");
+        System.out.println("COUNT QUERY");
+        System.out.println("==================================================");
+        System.out.println(countQuery + ";");
+
+        /*
+         * If count was not supplied, stop after generating
+         * the count query.
+         */
+        if (rowCount <= 0) {
+
+            System.out.println();
+            System.out.println("Run the above COUNT query.");
+            System.out.println("Then enter the returned count when running");
+            System.out.println("this program again.");
+
+            scanner.close();
+            return;
+        }
+
+        /*
+         * Calculate number of blocks.
+         *
+         * Example:
+         *
+         * 3,877,187 / 600,000
+         *
+         * = 7 blocks
+         */
+        long numberOfBlocks =
+                (rowCount + BATCH_SIZE - 1) / BATCH_SIZE;
+
+        System.out.println();
+        System.out.println("==================================================");
+        System.out.println("EXPORT INFORMATION");
+        System.out.println("==================================================");
+
+        System.out.println("Total distinct rows : " + rowCount);
+        System.out.println("Batch size          : " + BATCH_SIZE);
+        System.out.println("Number of blocks    : " + numberOfBlocks);
+
+        /*
+         * Generate export queries.
+         */
+        for (long block = 0; block < numberOfBlocks; block++) {
+
+            long offset = block * BATCH_SIZE;
+
+            /*
+             * Number of rows remaining.
+             */
+            long remaining = rowCount - offset;
+
+            /*
+             * Last block may contain fewer than 600,000 rows.
+             */
+            long fetchSize = Math.min(BATCH_SIZE, remaining);
+
+            System.out.println();
+            System.out.println("==================================================");
+            System.out.println("EXPORT BLOCK " + (block + 1));
+            System.out.println("OFFSET : " + offset);
+            System.out.println("ROWS   : " + fetchSize);
+            System.out.println("==================================================");
+
+            /*
+             * IMPORTANT:
+             *
+             * DISTINCT is performed inside the derived table.
+             *
+             * Then:
+             *
+             * DISTINCT
+             *    ↓
+             * ORDER BY
+             *    ↓
+             * OFFSET
+             *    ↓
+             * FETCH
+             */
+            String exportQuery =
+                    "SELECT " + columnName +
+                    " FROM (" +
+                    " SELECT DISTINCT " + columnName +
+                    " FROM " + tableName +
+                    " WHERE " + filterCondition +
+                    ") D" +
+                    " ORDER BY " + columnName +
+                    " OFFSET " + offset +
+                    " ROWS" +
+                    " FETCH FIRST " + fetchSize +
+                    " ROWS ONLY";
+
+            System.out.println(exportQuery + ";");
+        }
+
+        scanner.close();
+    }
+}
