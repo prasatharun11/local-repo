@@ -1,0 +1,14 @@
+Hi Team,
+
+Regarding the BBP finding, the flow works as below:
+
+"loadClaimDocsPage" (JS) → "getClaimDocPageLoad" (Java action) → "getclaimDocuments_json" (actual document loading)
+
+The "getClaimDocPageLoad" call only loads the skeleton/structure of the Claim Documents page. It does not return any actual claim documents or sensitive data.
+
+The actual documents are loaded through the subsequent "getclaimDocuments_json" call, where we have implemented the required server-side authorization check to ensure that only authorized users can access the documents.
+
+Therefore, the "getClaimDocPageLoad" response does not expose any vulnerable or unauthorized content.
+
+Regards,
+Arun
