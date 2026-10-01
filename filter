@@ -1,0 +1,54 @@
+import jakarta.servlet.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+public class ResourceAccessFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+        String path = httpRequest.getRequestURI();
+
+        // Only evaluate target assets (e.g., JavaScript files)
+        if (path.endsWith(".js")) {
+            boolean isDirect = isDirectRequest(httpRequest);
+
+            if (isDirect) {
+                // Block or handle direct address bar access
+                httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN, "Direct access is forbidden.");
+                return;
+            }
+        }
+
+        chain.doFilter(request, response);
+    }
+
+    private boolean isDirectRequest(HttpServletRequest request) {
+        String fetchDest = request.getHeader("Sec-Fetch-Dest");
+        String fetchMode = request.getHeader("Sec-Fetch-Mode");
+        String referer = request.getHeader("Referer");
+
+        // 1. Modern browser metadata check
+        if ("document".equalsIgnoreCase(fetchDest) || "navigate".equalsIgnoreCase(fetchMode)) {
+            return true;
+        }
+
+        // 2. Referer check fallback (direct address entry leaves referer null/empty)
+        if (referer == null || referer.trim().isEmpty()) {
+            return true;
+        }
+
+        // 3. Ensure referer comes from the same application host if needed
+        String host = request.getHeader("Host");
+        if (host != null && !referer.contains(host)) {
+            return true; // Came from external link, not your application
+        }
+
+        return false;
+    }
+}
