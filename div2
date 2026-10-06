@@ -1,0 +1,23 @@
+function searchAccount(searchText) {
+    searchText = searchText.trim().toLowerCase();
+
+    document.querySelectorAll(".div66-data tr").forEach(function(row) {
+
+        const accountButton = row.querySelector("td:first-child button");
+        const cells = row.querySelectorAll("td");
+
+        if (!accountButton || cells.length < 2) {
+            return;
+        }
+
+        const accountNumber = accountButton.textContent.trim().toLowerCase();
+        const accountName = cells[1].textContent.trim().toLowerCase();
+
+        const matched =
+            searchText === "" ||
+            accountNumber.includes(searchText) ||
+            accountName.includes(searchText);
+
+        row.classList.toggle("dontdisplay", !matched);
+    });
+}
