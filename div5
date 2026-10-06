@@ -1,0 +1,33 @@
+function searchAccount(searchText, type) {
+
+    searchText = $.trim(searchText).toLowerCase();
+
+    if (searchText === "") {
+        populateDiv66(all_data);
+        return;
+    }
+
+    var filteredResponse = $.extend({}, all_data);
+
+    filteredResponse.data = all_data.data.filter(function(item) {
+
+        if (type === "Num") {
+            return (item.accountNumber || "")
+                .toLowerCase()
+                .includes(searchText);
+        }
+
+        if (type === "Name") {
+            return (item.accountName || "")
+                .toLowerCase()
+                .includes(searchText);
+        }
+
+        return false;
+    });
+
+    filteredResponse.resultCount = filteredResponse.data.length;
+    filteredResponse.totalCount = filteredResponse.data.length;
+
+    populateDiv66(filteredResponse);
+}
