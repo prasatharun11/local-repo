@@ -1,0 +1,21 @@
+<%
+  long remainingSec = Math.max(0, (expiyTime - System.currentTimeMillis()) / 1000);
+%>
+<style nonce="irbnonce">
+  @property --t { syntax: '<integer>'; initial-value: 0; inherits: false; }
+  @keyframes count {
+    from { --t: <%= remainingSec %>; }
+    to   { --t: 0; }
+  }
+  #timer {
+    animation: count <%= remainingSec %>s linear forwards;
+    counter-reset: t var(--t);
+  }
+  #timer::after {
+    content: "Session expires in " counter(t) "s";
+  }
+</style>
+<meta http-equiv="refresh" content="<%= remainingSec %>;url=<%= request.getContextPath() %>/login.jsp">
+
+<li><span id="timer"></span> &nbsp;| &nbsp; ...rest of your content...</li>
+
