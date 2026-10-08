@@ -1,0 +1,23 @@
+<style nonce="irbnonce">
+  @property --t { syntax: '<integer>'; initial-value: 0; inherits: false; }
+
+  @keyframes count {
+    from { --t: <%= remainingSec %>; }
+    to   { --t: 0; }
+  }
+
+  #timer {
+    animation: count <%= remainingSec %>s linear forwards;
+    counter-reset:
+      h calc(round(down, var(--t) / 3600, 1))
+      m calc(round(down, mod(var(--t), 3600) / 60, 1))
+      s calc(mod(var(--t), 60));
+  }
+
+  #timer::after {
+    content: "Session expires in "
+             counter(h, decimal-leading-zero) ":"
+             counter(m, decimal-leading-zero) ":"
+             counter(s, decimal-leading-zero);
+  }
+</style>
