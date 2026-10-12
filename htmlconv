@@ -1,0 +1,158 @@
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.*;
+import java.util.regex.*;
+import java.util.stream.Collectors;
+
+/**
+ * Renames every *.html file in a project to *.jsp and rewrites all references
+ * (e.g. "public.html" -> "public.jsp") in java/js/xml/jsp/html/... files.
+ *
+ * Usage:
+ *   javac HtmlToJspConverter.java
+ *   java HtmlToJspConverter <projectRoot> [--dry-run] [--add-directive]
+ *
+ *   --dry-run        only print what would change, touch nothing
+ *   --add-directive  prepend a JSP page directive to each converted file
+ *
+ * TIP: commit your project to git (or take a backup) before running.
+ */
+public class HtmlToJspConverter {
+
+    // Directories that are never scanned
+    private static final Set<String> SKIP_DIRS = Set.of(
+            ".git", ".svn", ".idea", ".settings", ".vscode", "node_modules",
+            "target", "build", "bin", "out", "dist", ".gradle", ".mvn");
+
+    // Only text-like files are scanned for references (avoids corrupting binaries)
+    private static final Set<String> TEXT_EXTENSIONS = Set.of(
+            "java", "js", "jsx", "ts", "tsx", "jsp", "jspf", "tag", "html", "htm",
+            "xhtml", "xml", "properties", "json", "css", "scss", "less", "md",
+            "txt", "yml", "yaml", "gradle", "conf", "ini", "tld", "vm", "ftl",
+            "sql", "csv");
+
+    private static final String DIRECTIVE =
+            "<%@ page contentType=\"text/html; charset=UTF-8\" pageEncoding=\"UTF-8\" %>\n";
+
+    public static void main(String[] args) throws IOException {
+        if (args.length < 1) {
+            System.out.println("Usage: java HtmlToJspConverter <projectRoot> [--dry-run] [--add-directive]");
+            return;
+        }
+        Path root = Paths.get(args[0]).toAbsolutePath().normalize();
+        boolean dryRun = Arrays.asList(args).contains("--dry-run");
+        boolean addDirective = Arrays.asList(args).contains("--add-directive");
+
+        if (!Files.isDirectory(root)) {
+            System.err.println("Not a directory: " + root);
+            return;
+        }
+
+        // 1. Collect files
+        List<Path> htmlFiles = new ArrayList<>();
+        List<Path> textFiles = new ArrayList<>();
+        walk(root, htmlFiles, textFiles);
+
+        if (htmlFiles.isEmpty()) {
+            System.out.println("No .html files found under " + root);
+            return;
+        }
+
+        // 2. Build one regex matching any known html file name (e.g. public.html)
+        Set<String> baseNames = new TreeSet<>();
+        for (Path p : htmlFiles) {
+            String n = p.getFileName().toString();
+            baseNames.add(n.substring(0, n.length() - ".html".length()));
+        }
+        String alternation = baseNames.stream()
+                .sorted(Comparator.comparingInt(String::length).reversed())
+                .map(Pattern::quote)
+                .collect(Collectors.joining("|"));
+        // not preceded by a name character, not followed by one
+        Pattern pattern = Pattern.compile(
+                "(?<![A-Za-z0-9_.\\-])(" + alternation + ")\\.html(?![A-Za-z0-9_])");
+
+        // 3. Rewrite references in all text files (html files included, at their old paths)
+        int changedFiles = 0, totalReplacements = 0;
+        for (Path file : textFiles) {
+            String content;
+            try {
+                content = Files.readString(file, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                System.out.println("SKIP (not UTF-8 / unreadable): " + root.relativize(file));
+                continue;
+            }
+            Matcher m = pattern.matcher(content);
+            int count = 0;
+            StringBuilder sb = new StringBuilder();
+            while (m.find()) {
+                m.appendReplacement(sb, Matcher.quoteReplacement(m.group(1) + ".jsp"));
+                count++;
+            }
+            m.appendTail(sb);
+            if (count > 0) {
+                changedFiles++;
+                totalReplacements += count;
+                System.out.println("UPDATE  " + root.relativize(file) + "  (" + count + " reference(s))");
+                if (!dryRun) {
+                    Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);
+                }
+            }
+        }
+
+        // 4. Rename .html -> .jsp
+        int renamed = 0;
+        for (Path html : htmlFiles) {
+            String name = html.getFileName().toString();
+            Path jsp = html.resolveSibling(name.substring(0, name.length() - 5) + ".jsp");
+            if (Files.exists(jsp)) {
+                System.out.println("SKIP    " + root.relativize(html) + "  (target .jsp already exists)");
+                continue;
+            }
+            System.out.println("RENAME  " + root.relativize(html) + "  ->  " + jsp.getFileName());
+            if (!dryRun) {
+                Files.move(html, jsp);
+                if (addDirective) {
+                    String c = Files.readString(jsp, StandardCharsets.UTF_8);
+                    if (!c.contains("<%@ page")) {
+                        Files.writeString(jsp, DIRECTIVE + c, StandardCharsets.UTF_8);
+                    }
+                }
+            }
+            renamed++;
+        }
+
+        System.out.println();
+        System.out.println((dryRun ? "[DRY RUN] " : "") + "Done. Renamed " + renamed
+                + " file(s); updated " + changedFiles + " file(s) with "
+                + totalReplacements + " reference(s).");
+    }
+
+    private static void walk(Path root, List<Path> htmlFiles, List<Path> textFiles) throws IOException {
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                if (!dir.equals(root) && SKIP_DIRS.contains(dir.getFileName().toString())) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                String name = file.getFileName().toString();
+                int dot = name.lastIndexOf('.');
+                String ext = dot < 0 ? "" : name.substring(dot + 1).toLowerCase();
+                if (ext.equals("html")) {
+                    htmlFiles.add(file);
+                }
+                if (TEXT_EXTENSIONS.contains(ext)) {
+                    textFiles.add(file);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+}
