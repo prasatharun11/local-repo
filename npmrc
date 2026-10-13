@@ -1,0 +1,11 @@
+registry=https://<host>/artifactory/api/npm/<repo>/
+//<host>/artifactory/api/npm/<repo>/:_auth=${NPM_AUTH}
+//<host>/artifactory/api/npm/<repo>/:always-auth=true
+
+
+
+npmInstall {
+    environment = [
+        NPM_AUTH: "${System.getenv('artifactory_usrname')}:${System.getenv('artifactory_password')}".bytes.encodeBase64().toString()
+    ]
+}
