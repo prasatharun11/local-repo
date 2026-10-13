@@ -1,0 +1,29 @@
+
+tasks.named('npmInstall') {
+    def artifactoryUsername =
+            System.getenv('ARTIFACTORY_USERNAME') ?:
+            System.getenv('artifactory_username') ?:
+            System.getenv('artifactory_usrname')
+
+    def artifactoryPassword =
+            System.getenv('ARTIFACTORY_PASSWORD') ?:
+            System.getenv('artifactory_password')
+
+    if (!artifactoryUsername || !artifactoryPassword) {
+        throw new GradleException(
+            'Artifactory username/password environment variables are missing.'
+        )
+    }
+
+    environment = [
+        'NPM_AUTH': "${artifactoryUsername}:${artifactoryPassword}"
+                .bytes.encodeBase64().toString()
+    ]
+
+    doFirst {
+        logger.lifecycle(
+            "Artifactory username available: ${artifactoryUsername != null}"
+        )
+        logger.lifecycle('Artifactory password available: true')
+    }
+}
