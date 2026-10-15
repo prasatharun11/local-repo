@@ -1,0 +1,35 @@
+
+def isServer = System.getenv('JENKINS_HOME') != null
+
+logger.lifecycle("Build environment: ${isServer ? 'SERVER' : 'LOCAL'}")
+
+// Skip Node/npm setup and obfuscation tasks for local builds.
+if (!isServer) {
+    ['nodeSetup', 'npmSetup', 'npmInstall',
+     'obfuscateJs', 'cleanNodeModules'].each { taskName ->
+        tasks.matching { it.name == taskName }.configureEach {
+            onlyIf { false }
+        }
+    }
+}
+
+task obfuscateJs(type: NpmTask) {
+    description = 'Obfuscate JavaScript files'
+    group = 'build'
+    dependsOn npmInstall
+    args = ['run', 'obfuscate']
+
+    inputs.dir("${projectDir}/src/main/webapp/ir_js/v2")
+    outputs.dir("${projectDir}/src/main/webapp/ir_js/v2")
+}
+
+tasks.register('cleanNodeModules', Delete) {
+    delete "${projectDir}/nodejs"
+    delete "${projectDir}/node_modules"
+}
+
+tasks.named('obfuscateJs') {
+    finalizedBy cleanNodeModules
+}
+
+war.dependsOn obfuscateJs
