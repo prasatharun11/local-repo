@@ -1,0 +1,72 @@
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+public class JspVersionUpdater {
+
+    // Configure these two variables
+    private static final String FOLDER_PATH =
+            "C:/myproject/src/main/webapp";
+
+    private static final String VERSION = "v6";
+
+    public static void main(String[] args) {
+
+        Path folder = Paths.get(FOLDER_PATH);
+        String comment = "<%-- " + VERSION + " --%>";
+        String newline = System.lineSeparator();
+
+        Pattern versionPattern = Pattern.compile(
+                "(?im)^\\s*<%--\\s*v\\d+\\s*--%>\\s*\\R*"
+              + "|\\R*\\s*<%--\\s*v\\d+\\s*--%>\\s*$"
+        );
+
+        if (!Files.isDirectory(folder)) {
+            System.err.println("Invalid folder: " + folder.toAbsolutePath());
+            return;
+        }
+
+        try (Stream<Path> files = Files.walk(folder)) {
+
+            files.filter(Files::isRegularFile)
+                 .filter(p -> p.getFileName().toString()
+                         .toLowerCase().endsWith(".jsp"))
+                 .forEach(path -> {
+                     try {
+                         String original = Files.readString(
+                                 path, StandardCharsets.UTF_8);
+
+                         String content = versionPattern.matcher(original)
+                                 .replaceAll("");
+
+                         // Preserve the original content and formatting
+                         String updated = comment + newline
+                                 + content.replaceAll("\\s+$", "")
+                                 + newline + comment + newline;
+
+                         if (!updated.equals(original)) {
+                             Files.writeString(path, updated,
+                                     StandardCharsets.UTF_8);
+                             System.out.println("Updated: " + path);
+                         } else {
+                             System.out.println("Unchanged: " + path);
+                         }
+
+                     } catch (IOException e) {
+                         System.err.println("Error updating " + path
+                                 + ": " + e.getMessage());
+                     }
+                 });
+
+            System.out.println("JSP version update completed.");
+
+        } catch (IOException e) {
+            System.err.println("Error scanning folder: " + e.getMessage());
+        }
+    }
+}
