@@ -1,0 +1,30 @@
+
+def obfuscationFlag =
+        System.getenv('JS_OBFUSCATION') ?:
+        System.getProperty('JS_OBFUSCATION')
+
+def isJenkins = System.getenv('JENKINS_HOME') != null
+
+def obfuscationEnabled
+
+if (obfuscationFlag != null &&
+        obfuscationFlag.equalsIgnoreCase('false')) {
+    obfuscationEnabled = false
+} else {
+    obfuscationEnabled = isJenkins
+}
+
+logger.lifecycle("Jenkins detected: ${isJenkins}")
+logger.lifecycle("JavaScript obfuscation enabled: ${obfuscationEnabled}")
+
+// Configure the existing tasks after they have been registered.
+gradle.projectsEvaluated {
+    if (!obfuscationEnabled) {
+        ['nodeSetup', 'npmSetup', 'npmInstall',
+         'obfuscateJs', 'cleanNodeModules'].each { taskName ->
+            tasks.findByName(taskName)?.enabled = false
+        }
+    }
+}
+
+war.dependsOn obfuscateJs
