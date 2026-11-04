@@ -1,0 +1,20 @@
+| # | App 1 | App 2 | Internal action | Public response |
+|---|---|---|---|---|
+| 1 | New (eligible) | New (eligible) | Register both | Generic message |
+| 2 | New (eligible) | Registered (already registered) | Register App 1 only | Generic message |
+| 3 | New (eligible) | Blocked (user blocked) | Register App 1 only | Generic message |
+| 4 | New (eligible) | Exceeded (more than 3 attempts) | Register App 1 only | Generic message |
+| 5 | Registered (already registered) | New (eligible) | Register App 2 only | Generic message |
+| 6 | Registered (already registered) | Registered (already registered) | Nothing, log it | Generic message |
+| 7 | Registered (already registered) | Blocked (user blocked) | Nothing, log it | Generic message |
+| 8 | Registered (already registered) | Exceeded (more than 3 attempts) | Nothing, log it | Generic message |
+| 9 | Blocked (user blocked) | New (eligible) | Register App 2 only | Generic message |
+| 10 | Blocked (user blocked) | Registered (already registered) | Nothing, log it | Generic message |
+| 11 | Blocked (user blocked) | Blocked (user blocked) | Nothing, log it | Generic message |
+| 12 | Blocked (user blocked) | Exceeded (more than 3 attempts) | Nothing, log it | Generic message |
+| 13 | Exceeded (more than 3 attempts) | New (eligible) | Register App 2 only | Generic message |
+| 14 | Exceeded (more than 3 attempts) | Registered (already registered) | Nothing, log it | Generic message |
+| 15 | Exceeded (more than 3 attempts) | Blocked (user blocked) | Nothing, log it | Generic message |
+| 16 | Exceeded (more than 3 attempts) | Exceeded (more than 3 attempts) | Nothing, log it | Generic message |
+
+**Generic message (same for all 16):** "Your request has been received. If you don't have access within 24 hours, please contact support."
