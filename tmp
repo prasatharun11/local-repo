@@ -1,0 +1,34 @@
+Hi team,
+
+Thanks for the follow-up. Answers below.
+
+**Report #4179817: registration (SelfRegNewUser)**
+
+- **Is registration by design?** Yes. The application lets an insured register themselves using their own policy details. These details are issued to the policyholder and are not publicly available or guessable. This is the intended business process, not a missing control.
+- **Geo-location restriction:** None that we are aware of.
+- **Error "IR012":** This is returned when reCAPTCHA validation fails, for example when registration is submitted through an automated tool or script instead of the normal UI. reCAPTCHA is enforced on both the front end and the server side. This is an intended anti-automation control, not a restriction on location. To reproduce the flow, please complete the registration manually through the application UI with a valid CAPTCHA, using the policy details of a valid insured.
+
+**Report #4179817: downloadreport_json**
+
+- **Can IDs be guessed or enumerated?** No. The rptId is a system-generated, high-entropy value (a long mixed alphanumeric string), not sequential or predictable. [We are not aware of any other action that returns report IDs belonging to other users, and the server verifies that the report belongs to the authenticated user. Please confirm before sending.]
+- **Data exposed:** Loss run data for the specific policy. We classify this as **Confidential**.
+
+**Report #4183914: getclaimsgraph_bardata_json**
+
+- **Is state + amounts sensitive?** The response contains limited financial information related to the claim. We classify it as **Confidential (business financial data)**, not PII.
+- **Classification when a claim ID is provided:** Same as above. The action returns only the financial fields shown in the report.
+- **Can other data be leaked?** No. The action does not return names, PII, or any other claim details beyond what is shown in the screenshots. [The claim ID is not sequential or guessable, and access requires an authenticated session. Please confirm.]
+
+Since your testers have internal access to the application and its data, results in their environment may differ from what a real insured would see. Please share the exact requests and responses if you still see unexpected behavior, and we'll review them.
+
+Thanks,
+[Name]
+
+---
+
+Before sending, resolve the two bracketed lines. They are the ones the testers will push on, because severity depends on whether one user can reach another user's report or claim.
+
+- If the ownership check exists, state it plainly and delete the brackets.
+- If it doesn't, remove those sentences rather than claiming it, and tell me so we can adjust the wording.
+
+I chose Confidential for both classifications. Swap in your organization's label if it differs.
