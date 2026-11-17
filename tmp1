@@ -1,0 +1,13 @@
+Hi Veracode Team,
+
+We noticed that some vulnerabilities (CWE-402, CWE-352, CWE-614 and CWE-829) that were previously submitted as false positives and approved are being reported again in the latest Dynamic Analysis scan with new finding IDs.
+
+The previous finding IDs are no longer available, even though the mitigations were already approved.
+
+Could you please investigate why the previously approved mitigations are not carried forward to the latest scan and advise how to prevent these findings from being repeatedly reported?
+
+Previous Scan: [Insert URL]
+
+Latest Scan: [Insert URL]
+
+Thanks & Regards,
