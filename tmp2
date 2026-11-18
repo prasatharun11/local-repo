@@ -1,0 +1,19 @@
+Hi Veracode Team,
+
+Our concern is not related to reproducing or validating the vulnerabilities through application access.
+
+The scenario is straightforward:
+
+1. In the previous Dynamic Analysis scan, findings for CWE-402, CWE-352, CWE-614 and CWE-829 were reported.
+2. We submitted false-positive mitigation requests, and all were approved.
+3. In the latest scan, the same vulnerabilities are reported again with new finding IDs. The previously approved findings are no longer available.
+
+Our expectation is that previously approved mitigations should be retained or appropriately mapped across subsequent scans when the same findings are detected.
+
+Could you please investigate this from the scan results and mitigation history using the two scan URLs already shared?
+
+We would like to understand why the approved mitigations are not being carried forward. We believe application login credentials with full access and an application walkthrough should not be necessary for investigating this particular issue.
+
+Please let us know if any specific scan-level information is required.
+
+Thanks & Regards,
