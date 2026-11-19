@@ -1,0 +1,13 @@
+Hi Team,
+
+I understand that the URLs are different. However, our concern is that the underlying security issue and vulnerable parameter are the same.
+
+For example, in the case of CWE-614, if the same cookie configuration is applicable across multiple application endpoints, the vulnerability may be detected against different URLs even though the underlying issue is identical.
+
+Similarly, CWE-352 may be reported across multiple endpoints due to the same underlying application security behaviour.
+
+Considering this, could you please clarify whether Veracode identifies findings as separate vulnerabilities solely based on URL differences, or whether it also considers the vulnerable parameter and underlying security issue?
+
+We would like to understand the exact finding-matching criteria and why previously approved mitigations cannot be carried forward in these cases.
+
+Thanks & Regards,
