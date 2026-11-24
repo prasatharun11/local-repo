@@ -1,0 +1,185 @@
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+// keep your existing imports for: logger, Encoder, ActionCallNames, IRiskConstants
+
+public class SecurityFilter implements Filter {
+
+    // ---- CONFIGURATION ----------------------------------------------------
+
+    // false = log only what WOULD be blocked (use for first few days), true = block.
+    // The session check on /pages/secure is ALWAYS enforced regardless of this flag.
+    private static final boolean ENFORCE = false;
+
+    // Every hostname users really reach the app with (UAT, LB name, aliases...)
+    private static final Set<String> ALLOWED_HOSTS = new HashSet<String>(Arrays.asList(
+            "app.yourdomain.com",
+            "www.yourdomain.com"));
+
+    // Paths that must skip all checks (Okta/SAML callbacks, health checks...). Use your real paths.
+    private static final Set<String> EXEMPT_PATHS = new HashSet<String>(Arrays.asList(
+            "/okta/callback",
+            "/saml/acs"));
+
+    private static final Set<String> STATE_CHANGING = new HashSet<String>(Arrays.asList(
+            "POST", "PUT", "DELETE", "PATCH"));
+
+    private static final String SECURE_FOLDER = "/pages/secure";
+
+    // ---- FILTER -----------------------------------------------------------
+
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException { }
+
+    @Override
+    public void destroy() { }
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        HttpServletResponse _response = (HttpServletResponse) response;
+
+        // Clean path: lower case and without ;jsessionid=...
+        String path = httpRequest.getRequestURI().toLowerCase();
+        int semi = path.indexOf(';');
+        if (semi > -1) {
+            path = path.substring(0, semi);
+        }
+
+        // 0. Exempt paths (Okta / SAML callbacks etc.)
+        if (isExempt(path)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        boolean isStatic = path.endsWith(".js") || path.endsWith(".css")
+                || path.endsWith(".png") || path.endsWith(".gif") || path.endsWith(".jpg");
+        boolean isSecure = path.contains(SECURE_FOLDER);
+
+        // 1. Secure folder: session is mandatory for every file type (always enforced)
+        if (isSecure) {
+            if (!isValidSession(httpRequest)) {
+                _response.sendRedirect(ActionCallNames.LOGIN_PAGE);
+                return;
+            }
+
+            // 2. POST/PUT/DELETE/PATCH must originate from our own site
+            if (STATE_CHANGING.contains(httpRequest.getMethod().toUpperCase())
+                    && !isSameOriginStateChange(httpRequest)) {
+                if (block(httpRequest, _response, "Cross-origin state change")) {
+                    return;
+                }
+            }
+        }
+
+        // 3. Static files (common or secure): no direct access, referer must be our own domain
+        if (isStatic && isBlockedStaticRequest(httpRequest)) {
+            if (block(httpRequest, _response, "Static file direct/foreign access")) {
+                return;
+            }
+        }
+
+        // 4. Everything else is allowed (login page, jsp with valid session, etc.)
+        chain.doFilter(request, response);
+    }
+
+    // ---- HELPERS ----------------------------------------------------------
+
+    private boolean isExempt(String path) {
+        for (String p : EXEMPT_PATHS) {
+            if (path.contains(p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Sends 403 when ENFORCE is true; otherwise only logs. Returns true if the response was sent. */
+    private boolean block(HttpServletRequest request, HttpServletResponse response, String reason)
+            throws IOException {
+        String msg = Encoder.forHtml(request.getRequestURI() + ": " + reason
+                + (ENFORCE ? " - blocked" : " - would be blocked (log-only mode)"));
+        if (ENFORCE) {
+            logger.debug(msg);
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return true;
+        }
+        logger.warn(msg);
+        return false;
+    }
+
+    /** True when a static file request is typed in the browser, cross-site, or has no own-domain referer. */
+    private boolean isBlockedStaticRequest(HttpServletRequest request) {
+        String dest = request.getHeader("Sec-Fetch-Dest");
+        String mode = request.getHeader("Sec-Fetch-Mode");
+        String site = request.getHeader("Sec-Fetch-Site");
+
+        // Opened directly as a page / typed in address bar
+        if ("document".equalsIgnoreCase(dest) || "navigate".equalsIgnoreCase(mode)) {
+            return true;
+        }
+
+        // Browser says it came from another site
+        if ("cross-site".equalsIgnoreCase(site)) {
+            return true;
+        }
+
+        // Referer must exist and belong to our own domain
+        String referer = request.getHeader(IRiskConstants.IRISK_HTTP_HEADER);
+        if (referer == null || referer.trim().isEmpty()) {
+            return true;
+        }
+        return !isAllowedHost(referer);
+    }
+
+    /** True when a POST/PUT/DELETE/PATCH comes from our own site. */
+    private boolean isSameOriginStateChange(HttpServletRequest request) {
+        // Browser-set header, cannot be forged by page JavaScript
+        String site = request.getHeader("Sec-Fetch-Site");
+        if (site != null) {
+            return "same-origin".equalsIgnoreCase(site);
+        }
+
+        // Fallback for older browsers: Origin first, then Referer
+        String source = request.getHeader("Origin");
+        if (source == null || source.trim().isEmpty() || "null".equalsIgnoreCase(source.trim())) {
+            source = request.getHeader(IRiskConstants.IRISK_HTTP_HEADER);
+        }
+        if (source == null || source.trim().isEmpty()) {
+            return false;
+        }
+        return isAllowedHost(source);
+    }
+
+    /** Exact host match on the parsed URL (never use contains/startsWith on the raw string). */
+    private boolean isAllowedHost(String url) {
+        try {
+            String host = new URI(url.trim()).getHost();
+            return host != null && ALLOWED_HOSTS.contains(host.toLowerCase());
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    // ---- YOUR EXISTING METHOD (keep your implementation) -------------------
+
+    private boolean isValidSession(HttpServletRequest request) {
+        // existing session validation logic
+        return false;
+    }
+}
